@@ -6,6 +6,7 @@ import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
 
 const TONES: { value: ContentTone; label: string; desc: string; emoji: string }[] = [
+  { value: '스레드감성형', label: '스레드 감성', desc: 'Threads 트렌드 그대로', emoji: '🧵' },
   { value: '공감형', label: '공감형', desc: '손님 감정에 공감', emoji: '🤝' },
   { value: '밈형', label: '밈형', desc: 'MZ 트렌드 반영', emoji: '😂' },
   { value: '사장님형', label: '사장님형', desc: '진정성 있는 목소리', emoji: '👨‍🍳' },

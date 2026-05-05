@@ -6,19 +6,41 @@ export const TONE_GUIDE: Record<ContentTone, string> = {
   '사장님형': '진정성 있는 사장님 목소리. 제품에 대한 애착과 고집이 느껴지게.',
   '감성형': '계절, 시간대, 냄새, 소리 등 감각적 묘사. 시적인 짧은 문장.',
   '고객소통형': '댓글 유도형. 선택지 제시나 질문으로 마무리. 참여 유도.',
+  '스레드감성형': '한국 Threads 특유의 감성. 짧은 문장 줄바꿈. 솔직하고 날것의 자영업 일상. 해시태그 없이 담백하게. "오늘 손님이 없었는데 빵이 다 팔렸다" 같은 반전 있는 짤막한 이야기.',
 }
 
 export function buildThreadsPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location' | 'brand_tone'>,
   tone: ContentTone,
   recentCaptions: string[],
-  contextNote?: string
+  contextNote?: string,
+  competitorHashtags?: string[],
+  contentTips?: string[]
 ): string {
   const recentStr = recentCaptions.length
     ? `최근 발행 글 (중복 금지):\n${recentCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
     : ''
 
+  const trendContext = `
+[${profile.business_type} 업종 트렌드 컨텍스트]
+당신은 한국 Threads와 Instagram에서 ${profile.business_type} 관련 계정(자영업자, 카페사장, 소상공인)들이 최근 올리는 게시물 트렌드를 잘 알고 있습니다.
+- 같은 업종 인기 계정들이 공통적으로 다루는 소재(재료 수급, 웨이팅, 단골손님, 날씨와 매출 관계, 신메뉴 개발 과정 등)를 반영하세요.
+- 지금 ${profile.business_type} 자영업자 커뮤니티에서 공감대를 얻는 키워드와 감성을 적극 활용하세요.
+${competitorHashtags?.length ? `- 경쟁/동종 해시태그: ${competitorHashtags.slice(0, 5).join(', ')}` : ''}
+${contentTips?.length ? `- 검증된 콘텐츠 전략: ${contentTips[0]}` : ''}`
+
+  const isThreadsStyle = tone === '스레드감성형'
+  const styleRules = isThreadsStyle
+    ? `- 한 문장씩 줄바꿈하여 호흡을 끊어라
+- 해시태그 배열은 비워두거나 1개만 (Threads 문화상 해시태그 최소화)
+- 150자 이내, 솔직하고 날것의 자영업 일상
+- 반전, 공감, 소소한 관찰이 핵심`
+    : `- 각 초안은 150자 이내
+- 해시태그는 별도 배열로 제공 (3~5개)
+- 이모지 2~3개 자연스럽게 포함`
+
   return `당신은 한국 소상공인 SNS 마케터입니다.
+${trendContext}
 
 브랜드: ${profile.brand_name}
 업종: ${profile.business_type}
@@ -29,12 +51,10 @@ export function buildThreadsPrompt(
 ${contextNote ? `오늘의 특이사항: ${contextNote}` : ''}
 ${recentStr}
 
-위 정보를 바탕으로 Threads 게시물 초안 3개를 작성하세요.
+위 업종 트렌드와 브랜드 정보를 바탕으로 Threads 게시물 초안 3개를 작성하세요.
 
 규칙:
-- 각 초안은 150자 이내
-- 해시태그는 별도 배열로 제공 (3~5개)
-- 이모지 2~3개 자연스럽게 포함
+${styleRules}
 - 최근 발행 글과 중복되지 않게
 
 반드시 다음 JSON 배열 형식으로만 응답하세요:

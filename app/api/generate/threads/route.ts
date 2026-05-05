@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   // 비즈니스 프로필 조회
   const { data: profile } = await supabase
     .from('business_profiles')
-    .select('brand_name, business_type, location, brand_tone')
+    .select('brand_name, business_type, location, brand_tone, competitor_hashtags, analysis_result')
     .eq('user_id', user.id)
     .single()
 
@@ -35,7 +35,14 @@ export async function POST(req: NextRequest) {
 
   const recentCaptions = recentContents?.map(c => c.caption).filter(Boolean) as string[] ?? []
 
-  const prompt = buildThreadsPrompt(profile, tone as ContentTone, recentCaptions, context_note)
+  const prompt = buildThreadsPrompt(
+    profile,
+    tone as ContentTone,
+    recentCaptions,
+    context_note,
+    profile.competitor_hashtags ?? [],
+    profile.analysis_result?.content_tips ?? []
+  )
   const text = await generateText(prompt)
   const drafts: ThreadsDraft[] = parseJSON(text)
 
