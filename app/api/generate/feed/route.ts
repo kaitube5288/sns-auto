@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData()
   const tone = formData.get('tone') as ContentTone
+  const mode = (formData.get('mode') as string) || 'solo'
   const imageFiles = formData.getAll('images') as File[]
 
   if (imageFiles.length === 0) {
@@ -49,7 +50,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const prompt = buildFeedPrompt(profile, tone, imageFiles.length)
+  const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['feed']
+  const { data: learnedExamples } = await supabase
+    .from('learned_examples')
+    .select('content_text, section')
+    .eq('user_id', user.id)
+    .in('section', sections)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  const prompt = buildFeedPrompt(profile, tone, imageFiles.length, learnedExamples ?? [])
   const text = await generateWithImages(prompt, imageBase64List)
   const draft: FeedDraft = parseJSON(text)
 

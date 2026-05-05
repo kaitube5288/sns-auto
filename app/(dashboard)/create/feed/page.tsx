@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Upload, X, Sparkles, Send, Clock, Copy, ArrowUpDown } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, FeedDraft } from '@/lib/types'
+import LearnSection from '@/components/create/LearnSection'
 
 const TONES: { value: ContentTone; emoji: string }[] = [
   { value: '공감형', emoji: '🤝' },
@@ -16,6 +17,8 @@ const TONES: { value: ContentTone; emoji: string }[] = [
 interface DraftResult extends FeedDraft { id?: string; media_urls: string[] }
 
 export default function FeedCreatePage() {
+  const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
+  const [mode, setMode] = useState<'solo' | 'combined'>('solo')
   const [tone, setTone] = useState<ContentTone>('감성형')
   const [images, setImages] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
@@ -49,6 +52,7 @@ export default function FeedCreatePage() {
     try {
       const formData = new FormData()
       formData.append('tone', tone)
+      formData.append('mode', mode)
       images.forEach(f => formData.append('images', f))
       const res = await fetch('/api/generate/feed', { method: 'POST', body: formData })
       const data = await res.json()
@@ -83,10 +87,18 @@ export default function FeedCreatePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">인스타 피드 생성기</h1>
-        <p className="text-gray-500 mt-1">사진을 올리면 AI가 캡션, 해시태그, 슬라이드 순서를 제안합니다</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">인스타 피드 생성기</h1>
+          <p className="text-gray-500 mt-1">사진을 올리면 AI가 캡션, 해시태그, 슬라이드 순서를 제안합니다</p>
+        </div>
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
+          <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
+        </div>
       </div>
+
+      {activeTab === 'learn' && <LearnSection section="feed" />}
 
       {toast && (
         <div className="fixed top-4 right-4 flex items-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-xl text-sm shadow-lg z-50">
@@ -94,9 +106,16 @@ export default function FeedCreatePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {activeTab === 'generate' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 업로드 + 설정 */}
         <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+            <h2 className="font-semibold text-gray-900 mb-2 text-sm">학습 데이터 범위</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode('solo')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'solo' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>단독 (피드만)</button>
+              <button onClick={() => setMode('combined')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'combined' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>통합 (전체 학습)</button>
+            </div>
+          </div>
           {/* 이미지 업로드 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3">사진 업로드 (최대 10장)</h2>
@@ -258,7 +277,7 @@ export default function FeedCreatePage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

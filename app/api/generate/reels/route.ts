@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const intent = (formData.get('intent') as string) || '제품 소개'
   const durationSec = parseInt((formData.get('duration') as string) || '30')
+  const mode = (formData.get('mode') as string) || 'solo'
   const frames = formData.getAll('frames') as File[]
   const videoFile = formData.get('video') as File | null
 
@@ -46,7 +47,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const prompt = buildReelsPrompt(profile, intent, durationSec)
+  const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['reels']
+  const { data: learnedExamples } = await supabase
+    .from('learned_examples')
+    .select('content_text, section')
+    .eq('user_id', user.id)
+    .in('section', sections)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
+  const prompt = buildReelsPrompt(profile, intent, durationSec, learnedExamples ?? [])
   const text = await generateWithImages(prompt, frameBase64List)
   const plan: ReelsPlan = parseJSON(text)
 

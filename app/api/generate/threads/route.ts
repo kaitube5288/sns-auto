@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { tone, context_note } = await req.json()
+  const { tone, context_note, mode = 'solo' } = await req.json()
 
   // 비즈니스 프로필 조회
   const { data: profile } = await supabase
@@ -35,13 +35,24 @@ export async function POST(req: NextRequest) {
 
   const recentCaptions = recentContents?.map(c => c.caption).filter(Boolean) as string[] ?? []
 
+  // 학습 예시 조회 (단독: threads만, 통합: 전체)
+  const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['threads']
+  const { data: learnedExamples } = await supabase
+    .from('learned_examples')
+    .select('content_text, section')
+    .eq('user_id', user.id)
+    .in('section', sections)
+    .order('created_at', { ascending: false })
+    .limit(20)
+
   const prompt = buildThreadsPrompt(
     profile,
     tone as ContentTone,
     recentCaptions,
     context_note,
     profile.competitor_hashtags ?? [],
-    profile.analysis_result?.content_tips ?? []
+    profile.analysis_result?.content_tips ?? [],
+    learnedExamples ?? []
   )
   const text = await generateText(prompt)
   const drafts: ThreadsDraft[] = parseJSON(text)

@@ -3,10 +3,13 @@
 import { useState, useRef } from 'react'
 import { Video, Sparkles, Music, Zap } from 'lucide-react'
 import type { ReelsPlan } from '@/lib/types'
+import LearnSection from '@/components/create/LearnSection'
 
 interface PlanResult extends ReelsPlan { id?: string }
 
 export default function ReelsCreatePage() {
+  const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
+  const [mode, setMode] = useState<'solo' | 'combined'>('solo')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [videoPreview, setVideoPreview] = useState<string | null>(null)
   const [intent, setIntent] = useState('')
@@ -60,6 +63,7 @@ export default function ReelsCreatePage() {
       formData.append('video', videoFile)
       formData.append('intent', intent || '제품 소개')
       formData.append('duration', String(duration))
+      formData.append('mode', mode)
       frames.forEach(f => formData.append('frames', f))
 
       const res = await fetch('/api/generate/reels', { method: 'POST', body: formData })
@@ -75,16 +79,31 @@ export default function ReelsCreatePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">릴스 기획 생성기</h1>
-        <p className="text-gray-500 mt-1">영상을 업로드하면 AI가 컷 구성, 자막, BGM을 기획합니다</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">릴스 기획 생성기</h1>
+          <p className="text-gray-500 mt-1">영상을 업로드하면 AI가 컷 구성, 자막, BGM을 기획합니다</p>
+        </div>
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
+          <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
+        </div>
       </div>
 
       <canvas ref={canvasRef} className="hidden" />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {activeTab === 'learn' && <LearnSection section="reels" />}
+
+      {activeTab === 'generate' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 업로드 패널 */}
         <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+            <h2 className="font-semibold text-gray-900 mb-2 text-sm">학습 데이터 범위</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setMode('solo')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'solo' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>단독 (릴스만)</button>
+              <button onClick={() => setMode('combined')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'combined' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>통합 (전체 학습)</button>
+            </div>
+          </div>
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3">영상 업로드</h2>
             {videoPreview ? (
@@ -220,7 +239,7 @@ export default function ReelsCreatePage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

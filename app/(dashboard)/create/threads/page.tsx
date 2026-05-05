@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2 } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
+import LearnSection from '@/components/create/LearnSection'
 
 const TONES: { value: ContentTone; label: string; desc: string; emoji: string }[] = [
   { value: '스레드감성형', label: '스레드 감성', desc: 'Threads 트렌드 그대로', emoji: '🧵' },
@@ -17,6 +18,8 @@ const TONES: { value: ContentTone; label: string; desc: string; emoji: string }[
 interface DraftWithId extends ThreadsDraft { id?: string }
 
 export default function ThreadsCreatePage() {
+  const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
+  const [mode, setMode] = useState<'solo' | 'combined'>('solo')
   const [tone, setTone] = useState<ContentTone>('공감형')
   const [contextNote, setContextNote] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,7 +38,7 @@ export default function ThreadsCreatePage() {
       const res = await fetch('/api/generate/threads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tone, context_note: contextNote }),
+        body: JSON.stringify({ tone, context_note: contextNote, mode }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
@@ -83,9 +86,22 @@ export default function ThreadsCreatePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
-        <p className="text-gray-500 mt-1">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
+          <p className="text-gray-500 mt-1">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
+        </div>
+        {/* 탭 */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setActiveTab('generate')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >✨ 생성하기</button>
+          <button
+            onClick={() => setActiveTab('learn')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          >📚 학습하기</button>
+        </div>
       </div>
 
       {toast && (
@@ -95,9 +111,26 @@ export default function ThreadsCreatePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {activeTab === 'learn' && <LearnSection section="threads" />}
+
+      {activeTab === 'generate' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 설정 패널 */}
         <div className="space-y-4">
+          {/* 생성 모드 */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+            <h2 className="font-semibold text-gray-900 mb-2 text-sm">학습 데이터 범위</h2>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setMode('solo')}
+                className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'solo' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+              >단독 (Threads만)</button>
+              <button
+                onClick={() => setMode('combined')}
+                className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'combined' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
+              >통합 (전체 학습)</button>
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3">톤 선택</h2>
             <div className="space-y-2">
@@ -254,7 +287,7 @@ export default function ThreadsCreatePage() {
             </div>
           )}
         </div>
-      </div>
+      </div>}
     </div>
   )
 }

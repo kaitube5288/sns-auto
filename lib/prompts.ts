@@ -9,16 +9,23 @@ export const TONE_GUIDE: Record<ContentTone, string> = {
   '스레드감성형': '한국 Threads 특유의 감성. 짧은 문장 줄바꿈. 솔직하고 날것의 자영업 일상. 해시태그 없이 담백하게. "오늘 손님이 없었는데 빵이 다 팔렸다" 같은 반전 있는 짤막한 이야기.',
 }
 
+interface LearnedEx { content_text: string | null; section: string }
+
 export function buildThreadsPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location' | 'brand_tone'>,
   tone: ContentTone,
   recentCaptions: string[],
   contextNote?: string,
   competitorHashtags?: string[],
-  contentTips?: string[]
+  contentTips?: string[],
+  learnedExamples?: LearnedEx[]
 ): string {
   const recentStr = recentCaptions.length
     ? `최근 발행 글 (중복 금지):\n${recentCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+    : ''
+
+  const learnedStr = learnedExamples?.length
+    ? `\n[학습된 스타일 예시 - 이 톤과 표현 방식을 적극 참고하세요]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}`
     : ''
 
   const trendContext = `
@@ -49,7 +56,7 @@ ${trendContext}
 
 톤 지침 [${tone}]: ${TONE_GUIDE[tone]}
 ${contextNote ? `오늘의 특이사항: ${contextNote}` : ''}
-${recentStr}
+${recentStr}${learnedStr}
 
 위 업종 트렌드와 브랜드 정보를 바탕으로 Threads 게시물 초안 3개를 작성하세요.
 
@@ -70,8 +77,13 @@ ${styleRules}
 export function buildFeedPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location'>,
   tone: ContentTone,
-  imageCount: number
+  imageCount: number,
+  learnedExamples?: LearnedEx[]
 ): string {
+  const learnedStr = learnedExamples?.length
+    ? `\n[학습된 스타일 예시 - 이 캡션 톤과 해시태그 스타일을 참고하세요]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}\n`
+    : ''
+
   return `당신은 한국 인스타그램 피드 전문 마케터입니다.
 
 브랜드: ${profile.brand_name}
@@ -79,7 +91,7 @@ export function buildFeedPrompt(
 지역: ${profile.location}
 사진 수: ${imageCount}장
 톤 [${tone}]: ${TONE_GUIDE[tone]}
-
+${learnedStr}
 첨부된 사진들을 분석하여 인스타그램 피드용 콘텐츠를 기획하세요.
 
 반드시 다음 JSON 형식으로만 응답하세요:
@@ -95,8 +107,13 @@ export function buildFeedPrompt(
 export function buildReelsPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location'>,
   intent: string,
-  durationSec: number
+  durationSec: number,
+  learnedExamples?: LearnedEx[]
 ): string {
+  const learnedStr = learnedExamples?.length
+    ? `\n[학습된 릴스 기획 예시 - 이 구성 방식을 참고하세요]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}\n`
+    : ''
+
   return `당신은 한국 인스타그램 릴스 기획 전문가입니다.
 
 브랜드: ${profile.brand_name}
@@ -104,6 +121,7 @@ export function buildReelsPrompt(
 지역: ${profile.location}
 기획 의도: ${intent}
 영상 길이: 약 ${durationSec}초
+${learnedStr}
 
 첨부된 영상 프레임들을 분석하여 릴스 기획안을 작성하세요.
 
