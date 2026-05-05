@@ -6,7 +6,7 @@ const keys = [
   process.env.GEMINI_API_KEY_3,
 ].filter(Boolean) as string[]
 
-const MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash']
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash']
 
 async function callGemini(
   prompt: string,
