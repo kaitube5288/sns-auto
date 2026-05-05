@@ -6,24 +6,29 @@ const keys = [
   process.env.GEMINI_API_KEY_3,
 ].filter(Boolean) as string[]
 
+const MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash']
+
 async function callGemini(
   prompt: string,
   imageParts?: Part[],
-  keyIndex = 0
+  keyIndex = 0,
+  modelIndex = 0
 ): Promise<string> {
-  if (keyIndex >= keys.length) throw new Error('모든 Gemini API 키 소진')
+  if (modelIndex >= MODELS.length) throw new Error('모든 Gemini 모델 소진')
+  if (keyIndex >= keys.length) return callGemini(prompt, imageParts, 0, modelIndex + 1)
 
   try {
     const genAI = new GoogleGenerativeAI(keys[keyIndex])
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: MODELS[modelIndex] })
 
     const parts: (string | Part)[] = imageParts ? [...imageParts, prompt] : [prompt]
     const result = await model.generateContent(parts)
     return result.response.text()
   } catch (err: unknown) {
     const error = err as { status?: number; message?: string }
-    if (error?.status === 429 && keyIndex + 1 < keys.length) {
-      return callGemini(prompt, imageParts, keyIndex + 1)
+    const retryable = error?.status === 429 || error?.status === 503
+    if (retryable) {
+      return callGemini(prompt, imageParts, keyIndex + 1, modelIndex)
     }
     throw err
   }
