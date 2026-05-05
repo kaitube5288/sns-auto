@@ -1,0 +1,9 @@
+{
+  "functions": {
+    "app/api/generate/**": { "maxDuration": 60 },
+    "app/api/publish/**": { "maxDuration": 60 },
+    "app/api/cron/**": { "maxDuration": 60 },
+    "app/api/setup/analyze": { "maxDuration": 60 },
+    "app/api/analytics/sync": { "maxDuration": 60 }
+  }
+}
