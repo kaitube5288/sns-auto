@@ -54,8 +54,21 @@ export async function POST(req: NextRequest) {
     profile.analysis_result?.content_tips ?? [],
     learnedExamples ?? []
   )
-  const text = await generateText(prompt)
-  const drafts: ThreadsDraft[] = parseJSON(text)
+
+  let text: string
+  try {
+    text = await generateText(prompt)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'AI 생성 중 오류가 발생했습니다.'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  let drafts: ThreadsDraft[]
+  try {
+    drafts = parseJSON(text)
+  } catch {
+    return NextResponse.json({ error: 'AI 응답 파싱 실패. 다시 시도해주세요.' }, { status: 500 })
+  }
 
   // draft로 DB에 저장
   const insertData = drafts.map(d => ({

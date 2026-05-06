@@ -57,8 +57,21 @@ export async function POST(req: NextRequest) {
     .limit(20)
 
   const prompt = buildReelsPrompt(profile, intent, durationSec, learnedExamples ?? [])
-  const text = await generateWithImages(prompt, frameBase64List)
-  const plan: ReelsPlan = parseJSON(text)
+
+  let text: string
+  try {
+    text = await generateWithImages(prompt, frameBase64List)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'AI 생성 중 오류가 발생했습니다.'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  let plan: ReelsPlan
+  try {
+    plan = parseJSON(text)
+  } catch {
+    return NextResponse.json({ error: 'AI 응답 파싱 실패. 다시 시도해주세요.' }, { status: 500 })
+  }
 
   const { data: saved } = await supabase.from('contents').insert({
     user_id: user.id,

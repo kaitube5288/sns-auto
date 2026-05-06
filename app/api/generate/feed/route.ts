@@ -60,8 +60,21 @@ export async function POST(req: NextRequest) {
     .limit(20)
 
   const prompt = buildFeedPrompt(profile, tone, imageFiles.length, learnedExamples ?? [])
-  const text = await generateWithImages(prompt, imageBase64List)
-  const draft: FeedDraft = parseJSON(text)
+
+  let text: string
+  try {
+    text = await generateWithImages(prompt, imageBase64List)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'AI 생성 중 오류가 발생했습니다.'
+    return NextResponse.json({ error: msg }, { status: 500 })
+  }
+
+  let draft: FeedDraft
+  try {
+    draft = parseJSON(text)
+  } catch {
+    return NextResponse.json({ error: 'AI 응답 파싱 실패. 다시 시도해주세요.' }, { status: 500 })
+  }
 
   // DB 저장
   const mediaOrder = draft.slide_order.map((idx: number) => ({
