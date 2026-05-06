@@ -6,7 +6,7 @@ const keys = [
   process.env.GEMINI_API_KEY_3,
 ].filter(Boolean) as string[]
 
-const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash-8b']
+const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms))
 
@@ -32,6 +32,10 @@ async function callGemini(
     if (retryable) {
       await sleep(500)
       return callGemini(prompt, imageParts, keyIndex + 1, modelIndex)
+    }
+    // 모델 자체가 없으면(404) 다음 모델로 넘어감
+    if (error?.status === 404) {
+      return callGemini(prompt, imageParts, 0, modelIndex + 1)
     }
     throw err
   }
