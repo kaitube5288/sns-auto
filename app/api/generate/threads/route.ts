@@ -45,10 +45,33 @@ export async function POST(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  // 오늘의 자영업 트렌드 검색 (실패해도 계속 진행)
-  const trendSummary = await searchTrends(
-    `오늘 날짜 기준 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
-  ).catch(() => '')
+  // 트렌드 검색 (1시간 캐시 — API 쿼터 절약)
+  const cacheKey = `trend_${profile.business_type}`
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { data: cachedTrend } = await supabase
+    .from('trend_cache')
+    .select('recent_posts, fetched_at')
+    .eq('user_id', user.id)
+    .eq('hashtag', cacheKey)
+    .gte('fetched_at', oneHourAgo)
+    .single()
+
+  let trendSummary = (cachedTrend?.recent_posts as { summary?: string } | null)?.summary ?? ''
+
+  if (!trendSummary) {
+    trendSummary = await searchTrends(
+      `오늘 날짜 기준 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
+    ).catch(() => '')
+
+    if (trendSummary) {
+      await supabase.from('trend_cache').upsert({
+        user_id: user.id,
+        hashtag: cacheKey,
+        recent_posts: { summary: trendSummary },
+        fetched_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,hashtag' })
+    }
+  }
 
   const prompt = buildThreadsPrompt(
     profile,

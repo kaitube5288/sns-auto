@@ -31,7 +31,7 @@ async function callGemini(
     const error = err as { status?: number; message?: string }
     const retryable = error?.status === 429 || error?.status === 503
     if (retryable) {
-      await sleep(500)
+      await sleep(keyIndex === 0 ? 1000 : 2000)
       return callGemini(prompt, imageParts, keyIndex + 1, modelIndex)
     }
     if (error?.status === 404) {
