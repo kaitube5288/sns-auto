@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2 } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2 } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
 import LearnSection from '@/components/create/LearnSection'
@@ -30,14 +30,61 @@ export default function ThreadsCreatePage() {
   const [scheduledAt, setScheduledAt] = useState('')
   const [toast, setToast] = useState('')
 
+  // AI 수정
+  const [refineInstructions, setRefineInstructions] = useState<Record<number, string>>({})
+  const [refiningIdx, setRefiningIdx] = useState<number | null>(null)
+
+  // 사진 첨부
+  const [publishImages, setPublishImages] = useState<File[]>([])
+  const [publishPreviews, setPublishPreviews] = useState<string[]>([])
+  const publishImageRef = useRef<HTMLInputElement>(null)
+
   function updateDraft(i: number, caption: string) {
     setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
+  }
+
+  async function refine(i: number) {
+    const instruction = refineInstructions[i]?.trim()
+    if (!instruction) return
+    setRefiningIdx(i)
+    try {
+      const res = await fetch('/api/generate/threads/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caption: drafts[i].caption, instruction }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(data.error); return }
+      updateDraft(i, data.caption)
+      setRefineInstructions(prev => ({ ...prev, [i]: '' }))
+    } catch {
+      alert('수정 중 오류가 발생했습니다.')
+    } finally {
+      setRefiningIdx(null)
+    }
+  }
+
+  function handlePublishImages(files: FileList | null) {
+    if (!files) return
+    const newFiles = Array.from(files).slice(0, 4 - publishImages.length)
+    setPublishImages(prev => [...prev, ...newFiles])
+    newFiles.forEach(f => {
+      const reader = new FileReader()
+      reader.onload = e => setPublishPreviews(prev => [...prev, e.target?.result as string])
+      reader.readAsDataURL(f)
+    })
+  }
+
+  function removePublishImage(i: number) {
+    setPublishImages(prev => prev.filter((_, idx) => idx !== i))
+    setPublishPreviews(prev => prev.filter((_, idx) => idx !== i))
   }
 
   async function generate() {
     setLoading(true)
     setDrafts([])
     setSelected(null)
+    setRefineInstructions({})
     try {
       const res = await fetch('/api/generate/threads', {
         method: 'POST',
@@ -60,6 +107,14 @@ export default function ThreadsCreatePage() {
     const draft = drafts[selected]
     setPublishing(true)
     try {
+      // 사진 첨부 시 먼저 업로드
+      if (publishImages.length > 0 && draft.id) {
+        const formData = new FormData()
+        publishImages.forEach(f => formData.append('images', f))
+        formData.append('content_id', draft.id)
+        await fetch('/api/media/upload', { method: 'POST', body: formData })
+      }
+
       const body: Record<string, unknown> = { content_id: draft.id }
       if (!immediate && scheduledAt) body.scheduled_at = scheduledAt
 
@@ -95,7 +150,6 @@ export default function ThreadsCreatePage() {
           <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
           <p className="text-gray-500 mt-1">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
         </div>
-        {/* 탭 */}
         <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
           <button
             onClick={() => setActiveTab('generate')}
@@ -120,7 +174,6 @@ export default function ThreadsCreatePage() {
       {activeTab === 'generate' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 설정 패널 */}
         <div className="space-y-4">
-          {/* 생성 모드 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-2 text-sm">학습 데이터 범위</h2>
             <div className="grid grid-cols-2 gap-2">
@@ -218,6 +271,28 @@ export default function ThreadsCreatePage() {
                     {d.engagement_hook && (
                       <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2">{d.engagement_hook}</p>
                     )}
+
+                    {/* AI 수정 */}
+                    <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2" onClick={e => e.stopPropagation()}>
+                      <input
+                        value={refineInstructions[i] || ''}
+                        onChange={e => setRefineInstructions(prev => ({ ...prev, [i]: e.target.value }))}
+                        onKeyDown={e => e.key === 'Enter' && refine(i)}
+                        placeholder="수정 지시 (예: 더 짧게, 마지막 문장 바꿔줘)"
+                        className="flex-1 text-xs border border-gray-200 rounded-lg px-2.5 py-2 outline-none focus:border-indigo-400"
+                      />
+                      <button
+                        onClick={() => refine(i)}
+                        disabled={refiningIdx === i || !refineInstructions[i]?.trim()}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-500 text-white text-xs font-medium disabled:opacity-50 hover:bg-indigo-600 whitespace-nowrap"
+                      >
+                        {refiningIdx === i
+                          ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                          : <Wand2 className="w-3 h-3" />
+                        }
+                        AI 수정
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -235,6 +310,13 @@ export default function ThreadsCreatePage() {
                       </div>
                     </div>
                     <p className="text-sm text-gray-800 whitespace-pre-wrap">{drafts[selected].caption}</p>
+                    {publishPreviews.length > 0 && (
+                      <div className="flex gap-1.5 mt-2">
+                        {publishPreviews.map((p, i) => (
+                          <img key={i} src={p} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                        ))}
+                      </div>
+                    )}
                     <p className="text-sm text-indigo-500 mt-1.5">{hashtagsToString(drafts[selected].hashtags)}</p>
                   </div>
                 </div>
@@ -242,6 +324,48 @@ export default function ThreadsCreatePage() {
 
               {/* 발행 액션 */}
               <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3">
+                {/* 사진 첨부 */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <Image className="w-3.5 h-3.5" /> 사진 첨부 (선택, 최대 4장)
+                    </p>
+                    {publishImages.length < 4 && (
+                      <button onClick={() => publishImageRef.current?.click()} className="text-xs text-indigo-500 hover:text-indigo-600">+ 추가</button>
+                    )}
+                  </div>
+                  {publishPreviews.length > 0 ? (
+                    <div className="flex gap-2 mb-1">
+                      {publishPreviews.map((p, i) => (
+                        <div key={i} className="relative w-14 h-14">
+                          <img src={p} alt="" className="w-full h-full object-cover rounded-lg" />
+                          <button
+                            onClick={() => removePublishImage(i)}
+                            className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => publishImageRef.current?.click()}
+                      className="w-full border border-dashed border-gray-200 rounded-xl py-2.5 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-400 transition-colors"
+                    >
+                      + 사진 추가 · Meta 연결 후 텍스트와 함께 발행
+                    </button>
+                  )}
+                  <input
+                    ref={publishImageRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => handlePublishImages(e.target.files)}
+                  />
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => publish(true)}
