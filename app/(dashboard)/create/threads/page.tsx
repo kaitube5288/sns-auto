@@ -30,6 +30,10 @@ export default function ThreadsCreatePage() {
   const [scheduledAt, setScheduledAt] = useState('')
   const [toast, setToast] = useState('')
 
+  function updateDraft(i: number, caption: string) {
+    setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
+  }
+
   async function generate() {
     setLoading(true)
     setDrafts([])
@@ -186,12 +190,12 @@ export default function ThreadsCreatePage() {
                   <div
                     key={i}
                     onClick={() => setSelected(i)}
-                    className={`bg-white rounded-2xl border p-4 cursor-pointer transition-all shadow-sm ${
+                    className={`bg-white rounded-2xl border p-4 transition-all shadow-sm ${
                       selected === i ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-200'
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-xs font-medium text-gray-400">초안 {i + 1}</span>
+                      <span className="text-xs font-medium text-gray-400">초안 {i + 1} <span className="text-indigo-400">· 직접 수정 가능</span></span>
                       <button
                         onClick={e => { e.stopPropagation(); copyText(d) }}
                         className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"
@@ -199,7 +203,13 @@ export default function ThreadsCreatePage() {
                         <Copy className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{d.caption}</p>
+                    <textarea
+                      value={d.caption}
+                      onChange={e => { e.stopPropagation(); updateDraft(i, e.target.value) }}
+                      onClick={e => { e.stopPropagation(); setSelected(i) }}
+                      rows={Math.max(4, d.caption.split('\n').length + 1)}
+                      className="w-full text-sm text-gray-800 leading-relaxed resize-none outline-none bg-transparent"
+                    />
                     <div className="flex flex-wrap gap-1.5 mt-2">
                       {d.hashtags.map(tag => (
                         <span key={tag} className="text-xs text-indigo-500">#{tag}</span>
