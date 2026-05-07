@@ -7,6 +7,7 @@ const keys = [
 ].filter(Boolean) as string[]
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b']
+const SEARCH_MODELS = ['gemini-2.0-flash', 'gemini-2.5-flash']
 
 const sleep = (ms: number) => new Promise(res => setTimeout(res, ms))
 
@@ -33,12 +34,32 @@ async function callGemini(
       await sleep(500)
       return callGemini(prompt, imageParts, keyIndex + 1, modelIndex)
     }
-    // 모델 자체가 없으면(404) 다음 모델로 넘어감
     if (error?.status === 404) {
       return callGemini(prompt, imageParts, 0, modelIndex + 1)
     }
     throw err
   }
+}
+
+// Google Search 그라운딩으로 오늘의 트렌드 검색
+export async function searchTrends(query: string): Promise<string> {
+  for (const modelName of SEARCH_MODELS) {
+    for (const key of keys) {
+      try {
+        const genAI = new GoogleGenerativeAI(key)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const model = genAI.getGenerativeModel({ model: modelName, tools: [{ googleSearch: {} } as any] })
+        const result = await model.generateContent(query)
+        return result.response.text()
+      } catch (err: unknown) {
+        const error = err as { status?: number }
+        if (error?.status === 429 || error?.status === 503 || error?.status === 404) continue
+        // 그라운딩 미지원 모델이면 그냥 넘어감
+        continue
+      }
+    }
+  }
+  return ''
 }
 
 export async function generateText(prompt: string): Promise<string> {
