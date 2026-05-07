@@ -108,6 +108,7 @@ export interface PostAnalytics {
 }
 
 export interface ThreadsDraft {
+  tone?: string
   caption: string
   hashtags: string[]
   engagement_hook: string

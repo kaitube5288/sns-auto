@@ -13,7 +13,7 @@ interface LearnedEx { content_text: string | null; section: string }
 
 export function buildThreadsPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location' | 'brand_tone'>,
-  tone: ContentTone,
+  tones: ContentTone[],
   recentCaptions: string[],
   contextNote?: string,
   competitorHashtags?: string[],
@@ -21,109 +21,66 @@ export function buildThreadsPrompt(
   learnedExamples?: LearnedEx[],
   trendSummary?: string
 ): string {
+  const perTone = tones.length === 1 ? 6 : 3
+  const total = tones.length * perTone
+
   const recentStr = recentCaptions.length
     ? `\n[최근 발행 글 - 반드시 다른 소재로]\n${recentCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
     : ''
-
   const learnedStr = learnedExamples?.length
     ? `\n[직접 학습시킨 스타일 - 이 말투/구조를 최우선 참고]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}`
     : ''
-
   const trendStr = trendSummary
     ? `\n[오늘의 자영업 트렌드 - 이 이슈들을 소재로 활용]\n${trendSummary}`
     : ''
 
-  const isThreadsStyle = tone === '스레드감성형'
+  const hasThreadsStyle = tones.includes('스레드감성형')
 
-  const styleExamples = isThreadsStyle ? `
-[한국 Threads 바이럴 글 실제 예시 - 이 구조와 말투 그대로 써야 함]
+  const threadsExamples = `
+[한국 Threads 바이럴 글 실제 예시 - 이 구조와 말투 그대로]
 
-예시1 (반전형):
-"오늘 점심에 손님이 한명도 없었어
+예시1 (반전형): "오늘 점심에 손님이 한명도 없었어\n\n저녁에 웨이팅 40분\n\n자영업은 아직도 모르겠음"
+예시2 (원가공개): "커피 한잔 6500원 비싸다고 하시는데\n\n원두 650원 우유 900원 컵220원 인건비1400원 임대료1100원\n\n남는 거 카드수수료 빼면\n\n그냥 하는 거예요 저는"
+예시3 (단골): "오늘 단골손님이 '사장님 덕분에 하루가 버텨졌어요' 하고 가셨는데\n\n이거 하나 때문에 계속하는 것 같기도 함"
+예시4 (현실): "창업 전: 내 카페에서 커피 마시며 책 읽는 내 모습\n창업 후: 설거지 설거지 설거지 설거지 설거지"
+예시5 (팩폭): "유튜브 보고 카페 창업했다는 분들\n\n유튜브에 나오는 카페들은 이미 잘 되는 곳임\n안 되는 카페는 유튜브 안 나옴"`
 
-저녁에 웨이팅 40분
+  const toneSection = tones.map((t, i) => {
+    const rules = t === '스레드감성형'
+      ? `한 문장씩 줄바꿈. 150~350자. 해시태그 0~1개. 이모지 없거나 1개. 반전/폭로/단골/관찰 형식. "~습니다" 금지.`
+      : `200~350자. 해시태그 3~5개. 이모지 1~2개. 구어체("~해요" "~거든요"). 홍보문구 금지.`
+    return `톤${tones.length > 1 ? i + 1 : ''}: ${t} — ${TONE_GUIDE[t]}\n  규칙: ${rules}`
+  }).join('\n')
 
-자영업은 아직도 모르겠음"
+  const instruction = tones.length === 1
+    ? `${tones[0]} 톤으로 총 ${total}개 작성 (서로 다른 포맷/소재)`
+    : `톤1(${tones[0]})으로 ${perTone}개 + 톤2(${tones[1]})으로 ${perTone}개 = 총 ${total}개\n- tone 필드에 정확한 톤명 기재 필수\n- 톤1 ${perTone}개를 먼저, 그 다음 톤2 ${perTone}개 순서로`
 
-예시2 (원가 공개형):
-"커피 한잔 6500원 비싸다고 하시는데
-
-원두 650원
-우유 900원
-컵+뚜껑 220원
-인건비 1400원
-임대료 1100원
-전기세 기타 300원
-
-남은 거 1930원에서 카드 수수료 빼면
-
-그냥 하는 거예요 저는"
-
-예시3 (단골 이야기):
-"오늘 단골손님이
-
-"사장님 덕분에 하루가 버텨졌어요" 하고 가셨는데
-
-이거 하나 때문에 계속하는 것 같기도 함"
-
-예시4 (자영업 현실):
-"창업 전 vs 후
-
-전: 내 카페에서 커피 마시면서 책 읽는 내 모습
-후: 설거지 설거지 설거지 설거지 설거지"
-
-예시5 (도발형 팩폭):
-"유튜브 보고 카페 창업했다는 분들
-
-유튜브에 나오는 카페들은 이미 잘 되는 곳임
-안 되는 카페는 유튜브 안 나옴
-
-이거 알고 시작하셨나요"` : `
-[한국 SNS 자영업자 글 예시 - 이 말투 참고]
-예시: "비 오는 날은 손님이 줄어들 것 같았는데 오늘은 반대였어요 ㅎㅎ 따뜻한 거 찾으시는 분들이 많이 오셨나봐요 이럴 때 제일 보람차거든요"
-예시: "신메뉴 개발하다가 10번 실패했는데 11번째에 드디어 됐어요. 맛있다고 하시면 그냥 눈물 날 것 같음"`
-
-  const styleRules = isThreadsStyle
-    ? `- 한 문장 쓰고 줄바꿈. 또 한 문장 쓰고 줄바꿈. 이게 핵심
-- 전체 길이: 150~350자 (위 예시들처럼)
-- 해시태그: 없거나 딱 1개
-- 이모지: 없거나 1개 최대
-- 반전, 숫자 공개, 현실 폭로, 단골 이야기, 오늘의 관찰 중 하나 선택
-- 첫 문장에서 스크롤 멈추게 만들어야 함 (훅)
-- "~습니다" 절대 금지. "~임" "~거든" "~더라고" "~한 것 같음" 사용`
-    : `- 전체 길이: 200~350자
-- 해시태그: 3~5개 별도 배열
-- 이모지: 1~2개 자연스럽게
-- 구어체 ("~해요" "~거든요" "~더라고요") 사용
-- 홍보 문구 ("최고의", "놓치지 마세요") 절대 금지`
-
-  return `너는 한국 ${profile.business_type} 자영업자 SNS 담당이야. 사장님이 폰으로 직접 쓴 것처럼 Threads 게시물 4개를 만들어줘.
+  return `너는 한국 ${profile.business_type} 자영업자 SNS 담당이야. 사장님이 폰으로 직접 쓴 것처럼 Threads 게시물을 만들어줘.
 
 브랜드: ${profile.brand_name} | 업종: ${profile.business_type} | 지역: ${profile.location}
-톤: ${tone} — ${TONE_GUIDE[tone]}
+${toneSection}
 ${contextNote ? `오늘 특이사항: ${contextNote}` : ''}
 ${trendStr}${recentStr}${learnedStr}
-${styleExamples}
+${hasThreadsStyle ? threadsExamples : ''}
 
-[절대 하면 안 되는 것]
-- "함께해요", "소중한", "행복한 하루", "최선을 다하는" 같은 뻔한 문장
-- "오늘도 열심히 준비했습니다" 류의 일반적인 홍보
-- 너무 짧아서 내용 없는 글 (최소 150자)
-- AI가 쓴 티 나는 완벽한 문장 구조
-
-[글쓰기 규칙]
-${styleRules}
-- 4개 초안이 서로 다른 포맷/소재여야 함
-- 최근 발행 글과 소재 중복 금지
-${competitorHashtags?.length ? `- 동종업계 트렌드 해시태그 참고: ${competitorHashtags.slice(0, 5).join(', ')}` : ''}
+[절대 금지]
+- "함께해요", "소중한", "행복한 하루", "최선을 다하는", "오늘도 열심히 준비했습니다"
+- AI 쓴 티 나는 완벽한 문장 구조 / 최소 150자 이상
+${competitorHashtags?.length ? `- 동종업계 해시태그 참고: ${competitorHashtags.slice(0, 5).join(', ')}` : ''}
 ${contentTips?.length ? `- 콘텐츠 전략: ${contentTips[0]}` : ''}
+
+[지시사항]
+${instruction}
+- 최근 발행 글과 소재 중복 금지
 
 반드시 다음 JSON 배열로만 응답 (다른 텍스트 없이):
 [
   {
+    "tone": "톤명",
     "caption": "게시물 본문 (줄바꿈은 \\n으로)",
     "hashtags": ["해시태그"],
-    "engagement_hook": "이 글에서 반응 유도 포인트"
+    "engagement_hook": "반응 유도 포인트"
   }
 ]`
 }

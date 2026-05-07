@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { tone, context_note, mode = 'solo' } = await req.json()
+  const { tones, tone, context_note, mode = 'solo' } = await req.json()
+  const selectedTones: ContentTone[] = tones ?? (tone ? [tone] : ['스레드감성형'])
 
   // 비즈니스 프로필 조회
   const { data: profile } = await supabase
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   const prompt = buildThreadsPrompt(
     profile,
-    tone as ContentTone,
+    selectedTones,
     recentCaptions,
     context_note,
     profile.competitor_hashtags ?? [],
@@ -104,7 +105,7 @@ export async function POST(req: NextRequest) {
     user_id: user.id,
     platform: 'threads' as const,
     content_type: 'threads_text' as const,
-    tone,
+    tone: d.tone ?? selectedTones[0],
     caption: d.caption,
     hashtags: d.hashtags,
     status: 'draft' as const,

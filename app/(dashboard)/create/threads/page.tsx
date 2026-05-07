@@ -19,7 +19,7 @@ interface DraftWithId extends ThreadsDraft { id?: string }
 export default function ThreadsCreatePage() {
   const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
   const [mode, setMode] = useState<'solo' | 'combined'>('solo')
-  const [tone, setTone] = useState<ContentTone>('스레드감성형')
+  const [selectedTones, setSelectedTones] = useState<ContentTone[]>(['스레드감성형'])
   const [contextNote, setContextNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [drafts, setDrafts] = useState<DraftWithId[]>([])
@@ -33,6 +33,26 @@ export default function ThreadsCreatePage() {
   const [publishImages, setPublishImages] = useState<File[]>([])
   const [publishPreviews, setPublishPreviews] = useState<string[]>([])
   const publishImageRef = useRef<HTMLInputElement>(null)
+
+  function toggleTone(t: ContentTone) {
+    setSelectedTones(prev => {
+      if (prev.includes(t)) {
+        // 마지막 하나는 해제 불가
+        if (prev.length === 1) return prev
+        return prev.filter(x => x !== t)
+      }
+      if (prev.length >= 2) {
+        // 2개 이미 선택됐으면 첫 번째 교체
+        return [prev[1], t]
+      }
+      return [...prev, t]
+    })
+  }
+
+  function toneOrder(t: ContentTone): number | null {
+    const idx = selectedTones.indexOf(t)
+    return idx === -1 ? null : idx + 1
+  }
 
   function updateDraft(i: number, caption: string) {
     setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
@@ -84,7 +104,7 @@ export default function ThreadsCreatePage() {
       const res = await fetch('/api/generate/threads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tone, context_note: contextNote, mode }),
+        body: JSON.stringify({ tones: selectedTones, context_note: contextNote, mode }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
@@ -134,6 +154,13 @@ export default function ThreadsCreatePage() {
     showToast('복사되었습니다')
   }
 
+  // 2x3 그리드: 왼쪽 col = drafts[0..2], 오른쪽 col = drafts[3..5]
+  const leftDrafts = drafts.slice(0, 3)
+  const rightDrafts = drafts.slice(3, 6)
+  const tone1Label = TONES.find(t => t.value === selectedTones[0])?.label ?? selectedTones[0]
+  const tone2Label = selectedTones[1] ? TONES.find(t => t.value === selectedTones[1])?.label ?? selectedTones[1] : tone1Label
+  const isTwoTones = selectedTones.length === 2
+
   return (
     <div className="space-y-5">
       {/* 헤더: 탭(왼쪽) + 학습범위(오른쪽) */}
@@ -167,22 +194,34 @@ export default function ThreadsCreatePage() {
 
       {activeTab === 'generate' && (
         <div className="space-y-4">
-          {/* 톤 선택 3x2 */}
+          {/* 톤 선택 — 최대 2개 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-3 text-sm">톤 선택</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-900 text-sm">톤 선택</h2>
+              <span className="text-xs text-gray-400">최대 2개 선택 · {isTwoTones ? '각 3개씩' : '6개'} 생성</span>
+            </div>
             <div className="grid grid-cols-3 gap-2">
-              {TONES.map(t => (
-                <button
-                  key={t.value}
-                  onClick={() => setTone(t.value)}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
-                    tone === t.value ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200'
-                  }`}
-                >
-                  <span className="text-lg">{t.emoji}</span>
-                  <span className="text-sm font-medium">{t.label}</span>
-                </button>
-              ))}
+              {TONES.map(t => {
+                const order = toneOrder(t.value)
+                const isSelected = order !== null
+                return (
+                  <button
+                    key={t.value}
+                    onClick={() => toggleTone(t.value)}
+                    className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                      isSelected ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200'
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                        {order}
+                      </span>
+                    )}
+                    <span className="text-lg">{t.emoji}</span>
+                    <span className="text-sm font-medium">{t.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -202,67 +241,67 @@ export default function ThreadsCreatePage() {
             >
               {loading
                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> 생성 중...</>
-                : <><Sparkles className="w-4 h-4" /> 글 생성 (4개)</>
+                : <><Sparkles className="w-4 h-4" /> 글 생성 ({isTwoTones ? '3+3' : '6'}개)</>
               }
             </button>
           </div>
 
-          {/* 초안 2x2 그리드 */}
+          {/* 초안 2x3 그리드 */}
           {drafts.length > 0 && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                {drafts.map((d, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setSelected(i)}
-                    className={`bg-white rounded-2xl border p-4 transition-all shadow-sm cursor-pointer ${
-                      selected === i ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-200'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-medium text-gray-400">초안 {i + 1} <span className="text-indigo-400">· 수정 가능</span></span>
-                      <button onClick={e => { e.stopPropagation(); copyText(d) }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-                        <Copy className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <textarea
-                      value={d.caption}
-                      onChange={e => { e.stopPropagation(); updateDraft(i, e.target.value) }}
-                      onClick={e => { e.stopPropagation(); setSelected(i) }}
-                      rows={Math.max(5, d.caption.split('\n').length + 1)}
-                      className="w-full text-sm text-gray-800 leading-relaxed resize-none outline-none bg-transparent"
-                    />
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {d.hashtags.map(tag => (
-                        <span key={tag} className="text-xs text-indigo-400">#{tag}</span>
-                      ))}
-                    </div>
-                    {d.engagement_hook && (
-                      <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2 leading-relaxed">{d.engagement_hook}</p>
-                    )}
-                    {/* AI 수정 */}
-                    <div className="mt-3 pt-2.5 border-t border-gray-100 flex gap-1.5" onClick={e => e.stopPropagation()}>
-                      <input
-                        value={refineInstructions[i] || ''}
-                        onChange={e => setRefineInstructions(prev => ({ ...prev, [i]: e.target.value }))}
-                        onKeyDown={e => e.key === 'Enter' && refine(i)}
-                        placeholder="수정 지시 (예: 더 짧게)"
-                        className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-indigo-400"
-                      />
-                      <button
-                        onClick={() => refine(i)}
-                        disabled={refiningIdx === i || !refineInstructions[i]?.trim()}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-medium disabled:opacity-50 hover:bg-indigo-600"
-                      >
-                        {refiningIdx === i
-                          ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-                          : <Wand2 className="w-3 h-3" />
-                        }
-                        AI
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {/* 컬럼 헤더 */}
+                <div className="flex items-center gap-1.5 pb-1 border-b border-indigo-100">
+                  <span className="w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                  <span className="text-xs font-semibold text-indigo-700">{tone1Label}</span>
+                </div>
+                <div className="flex items-center gap-1.5 pb-1 border-b border-gray-200">
+                  <span className="w-5 h-5 rounded-full bg-gray-400 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                  <span className="text-xs font-semibold text-gray-600">{tone2Label}</span>
+                </div>
+
+                {/* 왼쪽: 초안 1~3, 오른쪽: 초안 4~6 */}
+                {[0, 1, 2].map(row => {
+                  const leftIdx = row
+                  const rightIdx = row + 3
+                  return (
+                    <>
+                      {/* 왼쪽 카드 */}
+                      {leftDrafts[row] ? (
+                        <DraftCard
+                          key={`l${leftIdx}`}
+                          draft={leftDrafts[row]}
+                          idx={leftIdx}
+                          selected={selected === leftIdx}
+                          onSelect={() => setSelected(leftIdx)}
+                          onCopy={() => copyText(leftDrafts[row])}
+                          onUpdate={cap => updateDraft(leftIdx, cap)}
+                          refineInstruction={refineInstructions[leftIdx] || ''}
+                          onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [leftIdx]: v }))}
+                          onRefine={() => refine(leftIdx)}
+                          refining={refiningIdx === leftIdx}
+                        />
+                      ) : <div key={`l${leftIdx}`} />}
+
+                      {/* 오른쪽 카드 */}
+                      {rightDrafts[row] ? (
+                        <DraftCard
+                          key={`r${rightIdx}`}
+                          draft={rightDrafts[row]}
+                          idx={rightIdx}
+                          selected={selected === rightIdx}
+                          onSelect={() => setSelected(rightIdx)}
+                          onCopy={() => copyText(rightDrafts[row])}
+                          onUpdate={cap => updateDraft(rightIdx, cap)}
+                          refineInstruction={refineInstructions[rightIdx] || ''}
+                          onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [rightIdx]: v }))}
+                          onRefine={() => refine(rightIdx)}
+                          refining={refiningIdx === rightIdx}
+                        />
+                      ) : <div key={`r${rightIdx}`} />}
+                    </>
+                  )
+                })}
               </div>
 
               {/* 미리보기 + 사진첨부 + 발행 */}
@@ -348,6 +387,73 @@ export default function ThreadsCreatePage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+interface DraftCardProps {
+  draft: DraftWithId
+  idx: number
+  selected: boolean
+  onSelect: () => void
+  onCopy: () => void
+  onUpdate: (cap: string) => void
+  refineInstruction: string
+  onRefineChange: (v: string) => void
+  onRefine: () => void
+  refining: boolean
+}
+
+function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining }: DraftCardProps) {
+  return (
+    <div
+      onClick={onSelect}
+      className={`bg-white rounded-2xl border p-4 transition-all shadow-sm cursor-pointer ${
+        selected ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-200'
+      }`}
+    >
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-xs font-medium text-gray-400">초안 {idx + 1} <span className="text-indigo-400">· 수정 가능</span></span>
+        <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+          <Copy className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <textarea
+        value={draft.caption}
+        onChange={e => { e.stopPropagation(); onUpdate(e.target.value) }}
+        onClick={e => { e.stopPropagation(); onSelect() }}
+        rows={Math.max(5, draft.caption.split('\n').length + 1)}
+        className="w-full text-sm text-gray-800 leading-relaxed resize-none outline-none bg-transparent"
+      />
+      <div className="flex flex-wrap gap-1 mt-1.5">
+        {draft.hashtags.map(tag => (
+          <span key={tag} className="text-xs text-indigo-400">#{tag}</span>
+        ))}
+      </div>
+      {draft.engagement_hook && (
+        <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2 leading-relaxed">{draft.engagement_hook}</p>
+      )}
+      {/* AI 수정 */}
+      <div className="mt-3 pt-2.5 border-t border-gray-100 flex gap-1.5" onClick={e => e.stopPropagation()}>
+        <input
+          value={refineInstruction}
+          onChange={e => onRefineChange(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && onRefine()}
+          placeholder="수정 지시 (예: 더 짧게)"
+          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-indigo-400"
+        />
+        <button
+          onClick={onRefine}
+          disabled={refining || !refineInstruction.trim()}
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-medium disabled:opacity-50 hover:bg-indigo-600"
+        >
+          {refining
+            ? <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+            : <Wand2 className="w-3 h-3" />
+          }
+          AI
+        </button>
+      </div>
     </div>
   )
 }
