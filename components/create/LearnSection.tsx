@@ -22,7 +22,16 @@ export default function LearnSection({ section }: Props) {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const inputRef = useRef<HTMLInputElement>(null)
+
+  function toggleExpand(id: string) {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   useEffect(() => {
     fetch(`/api/learn?section=${section}`)
@@ -131,18 +140,29 @@ export default function LearnSection({ section }: Props) {
           </div>
         ) : (
           examples.map(ex => (
-            <div key={ex.id} className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex gap-3 items-start">
+            <div
+              key={ex.id}
+              className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm flex gap-3 items-start cursor-pointer hover:border-gray-200 transition-colors"
+              onClick={() => toggleExpand(ex.id)}
+            >
               {ex.image_url && (
                 <img src={ex.image_url} alt="" className="w-14 h-14 object-cover rounded-lg flex-shrink-0" />
               )}
               <div className="flex-1 min-w-0">
                 {ex.content_text && (
-                  <p className="text-xs text-gray-700 leading-relaxed line-clamp-4 whitespace-pre-wrap">{ex.content_text}</p>
+                  <p className={`text-xs text-gray-700 leading-relaxed whitespace-pre-wrap ${expandedIds.has(ex.id) ? '' : 'line-clamp-3'}`}>
+                    {ex.content_text}
+                  </p>
                 )}
-                <p className="text-xs text-gray-300 mt-1.5">{new Date(ex.created_at).toLocaleDateString('ko-KR')}</p>
+                <p className="text-xs text-gray-300 mt-1.5">
+                  {new Date(ex.created_at).toLocaleDateString('ko-KR')}
+                  {ex.content_text && ex.content_text.length > 80 && (
+                    <span className="ml-2 text-indigo-300">{expandedIds.has(ex.id) ? '▲ 접기' : '▼ 더보기'}</span>
+                  )}
+                </p>
               </div>
               <button
-                onClick={() => remove(ex.id)}
+                onClick={e => { e.stopPropagation(); remove(ex.id) }}
                 className="flex-shrink-0 p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
