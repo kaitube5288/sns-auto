@@ -163,23 +163,26 @@ export default function ThreadsCreatePage() {
 
   return (
     <div className="space-y-5">
-      {/* 헤더: 탭(왼쪽) + 학습범위(오른쪽) */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
-            <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
-          </div>
-          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-            <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
-            <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
-          </div>
+      {/* 헤더: 탭(왼쪽) + 제목(중앙) + 학습범위(오른쪽) */}
+      <div className="relative flex items-center">
+        {/* 왼쪽: 탭 */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
+          <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
+          <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">학습 범위</span>
-          <div className="flex gap-1">
-            <button onClick={() => setMode('solo')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${mode === 'solo' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>단독</button>
-            <button onClick={() => setMode('combined')} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${mode === 'combined' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>통합</button>
+
+        {/* 중앙: 제목 */}
+        <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
+          <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
+          <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
+        </div>
+
+        {/* 오른쪽: 학습범위 */}
+        <div className="ml-auto flex flex-col items-center gap-1.5 flex-shrink-0">
+          <span className="text-xs text-gray-400 font-medium">학습범위</span>
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+            <button onClick={() => setMode('solo')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'solo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>단독</button>
+            <button onClick={() => setMode('combined')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'combined' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>통합</button>
           </div>
         </div>
       </div>
