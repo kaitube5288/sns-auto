@@ -97,7 +97,7 @@ export function buildThreadsPrompt(
 - 구어체 ("~해요" "~거든요" "~더라고요") 사용
 - 홍보 문구 ("최고의", "놓치지 마세요") 절대 금지`
 
-  return `너는 한국 ${profile.business_type} 자영업자 SNS 담당이야. 사장님이 폰으로 직접 쓴 것처럼 Threads 게시물 3개를 만들어줘.
+  return `너는 한국 ${profile.business_type} 자영업자 SNS 담당이야. 사장님이 폰으로 직접 쓴 것처럼 Threads 게시물 4개를 만들어줘.
 
 브랜드: ${profile.brand_name} | 업종: ${profile.business_type} | 지역: ${profile.location}
 톤: ${tone} — ${TONE_GUIDE[tone]}
@@ -113,7 +113,7 @@ ${styleExamples}
 
 [글쓰기 규칙]
 ${styleRules}
-- 3개 초안이 서로 다른 포맷/소재여야 함
+- 4개 초안이 서로 다른 포맷/소재여야 함
 - 최근 발행 글과 소재 중복 금지
 ${competitorHashtags?.length ? `- 동종업계 트렌드 해시태그 참고: ${competitorHashtags.slice(0, 5).join(', ')}` : ''}
 ${contentTips?.length ? `- 콘텐츠 전략: ${contentTips[0]}` : ''}
