@@ -1,7 +1,7 @@
 export type Platform = 'instagram' | 'threads' | 'both'
 export type ContentType = 'threads_text' | 'feed' | 'reels'
 export type ContentStatus = 'draft' | 'confirmed' | 'scheduled' | 'publishing' | 'published' | 'failed'
-export type ContentTone = '공감형' | '밈형' | '사장님형' | '감성형' | '고객소통형' | '스레드감성형'
+export type ContentTone = '공감형' | '밈형' | '사장님형' | '감성형' | '고객소통형' | '스레드감성형' | '인스타감성형'
 
 export interface MetaAccount {
   id: string

@@ -6,12 +6,12 @@ import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, FeedDraft } from '@/lib/types'
 import LearnSection from '@/components/create/LearnSection'
 
-const TONES: { value: ContentTone; emoji: string }[] = [
-  { value: '공감형', emoji: '🤝' },
-  { value: '밈형', emoji: '😂' },
-  { value: '사장님형', emoji: '👨‍🍳' },
-  { value: '감성형', emoji: '🌿' },
-  { value: '고객소통형', emoji: '💬' },
+const TONES: { value: ContentTone; label: string; emoji: string }[] = [
+  { value: '인스타감성형', label: '인스타 감성', emoji: '📸' },
+  { value: '공감형',     label: '공감형',     emoji: '🤝' },
+  { value: '밈형',       label: '밈형',       emoji: '😂' },
+  { value: '사장님형',   label: '사장님형',   emoji: '👨‍🍳' },
+  { value: '고객소통형', label: '고객소통형', emoji: '💬' },
 ]
 
 interface DraftResult extends FeedDraft { id?: string; media_urls: string[] }
@@ -19,7 +19,7 @@ interface DraftResult extends FeedDraft { id?: string; media_urls: string[] }
 export default function FeedCreatePage() {
   const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
   const [mode, setMode] = useState<'solo' | 'combined'>('solo')
-  const [tone, setTone] = useState<ContentTone>('감성형')
+  const [tone, setTone] = useState<ContentTone>('인스타감성형')
   const [images, setImages] = useState<File[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -87,14 +87,27 @@ export default function FeedCreatePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">인스타 피드 생성기</h1>
-          <p className="text-gray-500 mt-1">사진을 올리면 AI가 캡션, 해시태그, 슬라이드 순서를 제안합니다</p>
-        </div>
-        <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+      {/* 헤더: 탭(왼쪽) + 제목(중앙) + 학습범위(오른쪽) */}
+      <div className="relative flex items-center">
+        {/* 왼쪽: 탭 */}
+        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
           <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
           <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
+        </div>
+
+        {/* 중앙: 제목 */}
+        <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
+          <h1 className="text-2xl font-bold text-gray-900">인스타 피드 생성기</h1>
+          <p className="text-gray-500 text-sm mt-0.5">사진을 올리면 AI가 캡션, 해시태그, 슬라이드 순서를 제안합니다</p>
+        </div>
+
+        {/* 오른쪽: 학습범위 */}
+        <div className="ml-auto flex flex-col items-center gap-1.5 flex-shrink-0">
+          <span className="text-xs text-gray-400 font-medium">학습범위</span>
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+            <button onClick={() => setMode('solo')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'solo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>단독</button>
+            <button onClick={() => setMode('combined')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'combined' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>통합</button>
+          </div>
         </div>
       </div>
 
@@ -109,13 +122,6 @@ export default function FeedCreatePage() {
       {activeTab === 'generate' && <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 업로드 + 설정 */}
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <h2 className="font-semibold text-gray-900 mb-2 text-sm">학습 데이터 범위</h2>
-            <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setMode('solo')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'solo' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>단독 (피드만)</button>
-              <button onClick={() => setMode('combined')} className={`py-2 rounded-xl text-sm font-medium border transition-colors ${mode === 'combined' ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>통합 (전체 학습)</button>
-            </div>
-          </div>
           {/* 이미지 업로드 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3">사진 업로드 (최대 10장)</h2>
@@ -151,16 +157,17 @@ export default function FeedCreatePage() {
           {/* 톤 선택 */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <h2 className="font-semibold text-gray-900 mb-3">톤 선택</h2>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {TONES.map(t => (
                 <button
                   key={t.value}
                   onClick={() => setTone(t.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    tone === t.value ? 'bg-indigo-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                    tone === t.value ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200'
                   }`}
                 >
-                  {t.emoji} {t.value}
+                  <span className="text-lg">{t.emoji}</span>
+                  <span className="text-sm font-medium">{t.label}</span>
                 </button>
               ))}
             </div>
