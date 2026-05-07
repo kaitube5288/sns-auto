@@ -115,8 +115,10 @@ export interface ThreadsDraft {
 }
 
 export interface FeedDraft {
+  tone?: string
   caption: string
   hashtags: string[]
   slide_order: number[]
   slide_descriptions: string[]
+  slide_tips?: string
 }

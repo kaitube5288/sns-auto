@@ -88,38 +88,57 @@ ${instruction}
 
 export function buildFeedPrompt(
   profile: Pick<BusinessProfile, 'brand_name' | 'business_type' | 'location'>,
-  tone: ContentTone,
-  imageCount: number,
+  tones: ContentTone[],
+  mediaCount: number,
+  hasVideo: boolean,
   learnedExamples?: LearnedEx[]
 ): string {
+  const tone1 = tones[0]
+  const tone2 = tones[1] ?? tones[0]
   const learnedStr = learnedExamples?.length
-    ? `\n[학습된 스타일 예시 - 이 캡션 톤과 해시태그 스타일을 참고하세요]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}\n`
+    ? `\n[학습된 스타일 예시]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}\n`
     : ''
+  const mediaDesc = hasVideo
+    ? `사진 ${mediaCount - 1}장 + 동영상 1개 (슬라이드 인덱스 ${mediaCount - 1})`
+    : `사진 ${mediaCount}장`
 
   return `당신은 한국 소상공인이 인스타그램에 직접 올리는 글을 대신 써주는 사람입니다.
 
 브랜드: ${profile.brand_name}
 업종: ${profile.business_type}
 지역: ${profile.location}
-사진 수: ${imageCount}장
-톤 [${tone}]: ${TONE_GUIDE[tone]}
+미디어: ${mediaDesc}
+톤1 [${tone1}]: ${TONE_GUIDE[tone1]}
+톤2 [${tone2}]: ${TONE_GUIDE[tone2]}
 ${learnedStr}
-첨부된 사진들을 분석하여 인스타그램 피드용 콘텐츠를 기획하세요.
+첨부된 사진·영상을 분석하여 인스타그램 피드용 콘텐츠 2개를 기획하세요.
+${hasVideo ? `※ 첨부 이미지 마지막 여러 장은 동영상 프레임입니다. slide_order에서 동영상은 인덱스 ${mediaCount - 1} 하나로만 표현하세요.` : ''}
 
-[반드시 지켜야 할 사람 말투 규칙]
-- 실제 사장님이 직접 쓴 것처럼 자연스러운 구어체로 작성
-- "~합니다/~입니다" 격식체 금지 → "~해요/~거든요/~더라고요" 사용
-- 홍보 티 나는 표현 금지 ("최고의", "놓치지 마세요", "지금 바로" 등)
-- 캡션은 200자 이내, 자연스럽고 공감 가는 문장으로
+[말투 규칙]
+- 구어체 ("~해요/~거든요/~더라고요"), "~합니다" 금지
+- 홍보 표현 금지, 캡션 200자 이내
+- slide_order: 0부터 ${mediaCount - 1}까지 정수만 사용 (${mediaCount}개)
+- slide_descriptions: 인덱스 0부터 ${mediaCount - 1}까지 각 미디어 설명
 
-반드시 다음 JSON 형식으로만 응답하세요:
-{
-  "caption": "피드 메인 캡션",
-  "hashtags": ["해시태그 20개"],
-  "slide_order": [0, 1, 2, ...],
-  "slide_descriptions": ["각 슬라이드 설명 (순서대로)"],
-  "slide_tips": "슬라이드 구성 전략 한 줄 코멘트"
-}`
+반드시 다음 JSON 배열(정확히 2개)로만 응답하세요:
+[
+  {
+    "tone": "${tone1}",
+    "caption": "캡션 1",
+    "hashtags": ["해시태그 20개"],
+    "slide_order": [0, 1, 2, ...],
+    "slide_descriptions": ["미디어 인덱스 0 설명", "미디어 인덱스 1 설명", ...],
+    "slide_tips": "슬라이드 구성 한 줄 전략"
+  },
+  {
+    "tone": "${tone2}",
+    "caption": "캡션 2",
+    "hashtags": ["해시태그 20개"],
+    "slide_order": [0, 1, 2, ...],
+    "slide_descriptions": ["미디어 인덱스 0 설명", "미디어 인덱스 1 설명", ...],
+    "slide_tips": "슬라이드 구성 한 줄 전략"
+  }
+]`
 }
 
 export function buildReelsPrompt(

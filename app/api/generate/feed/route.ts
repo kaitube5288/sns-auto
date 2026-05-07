@@ -12,15 +12,17 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const formData = await req.formData()
-  const tone = formData.get('tone') as ContentTone
+  const tonesRaw = formData.get('tones') as string
+  const tones: ContentTone[] = tonesRaw ? JSON.parse(tonesRaw) : ['인스타감성형']
   const mode = (formData.get('mode') as string) || 'solo'
   const imageFiles = formData.getAll('images') as File[]
+  const videoFile = formData.get('video') as File | null
+  const videoFrameFiles = formData.getAll('video_frames') as File[]
 
-  if (imageFiles.length === 0) {
-    return NextResponse.json({ error: '이미지를 업로드해주세요.' }, { status: 400 })
+  if (imageFiles.length === 0 && !videoFile) {
+    return NextResponse.json({ error: '이미지 또는 동영상을 업로드해주세요.' }, { status: 400 })
   }
 
-  // 비즈니스 프로필 조회
   const { data: profile } = await supabase
     .from('business_profiles')
     .select('brand_name, business_type, location')
@@ -29,26 +31,43 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: '업종 분석 설정을 먼저 완료해주세요.' }, { status: 400 })
 
-  // 이미지 → base64
+  // 사진 → base64 + Storage 업로드
   const imageBase64List: string[] = []
-  const uploadedUrls: string[] = []
+  const uploadedPhotoUrls: string[] = []
 
   for (const file of imageFiles) {
-    const arrayBuffer = await file.arrayBuffer()
-    const b64 = `data:${file.type};base64,${Buffer.from(arrayBuffer).toString('base64')}`
-    imageBase64List.push(b64)
-
-    // Supabase Storage 업로드
+    const ab = await file.arrayBuffer()
+    imageBase64List.push(`data:${file.type};base64,${Buffer.from(ab).toString('base64')}`)
     const path = `${user.id}/media/${Date.now()}-${file.name}`
     const { data: uploaded } = await supabase.storage
-      .from('media')
-      .upload(path, arrayBuffer, { contentType: file.type, upsert: true })
-
+      .from('media').upload(path, ab, { contentType: file.type, upsert: true })
     if (uploaded) {
       const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
-      uploadedUrls.push(publicUrl)
+      uploadedPhotoUrls.push(publicUrl)
     }
   }
+
+  // 동영상 → Storage 업로드
+  let videoUrl: string | null = null
+  if (videoFile) {
+    const ab = await videoFile.arrayBuffer()
+    const path = `${user.id}/media/${Date.now()}-${videoFile.name}`
+    const { data: uploaded } = await supabase.storage
+      .from('media').upload(path, ab, { contentType: videoFile.type, upsert: true })
+    if (uploaded) {
+      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
+      videoUrl = publicUrl
+    }
+    // 동영상 프레임을 AI 분석용으로 추가 (슬라이드 인덱스에는 미포함)
+    for (const frame of videoFrameFiles) {
+      const fab = await frame.arrayBuffer()
+      imageBase64List.push(`data:image/jpeg;base64,${Buffer.from(fab).toString('base64')}`)
+    }
+  }
+
+  const allUrls = videoUrl ? [...uploadedPhotoUrls, videoUrl] : uploadedPhotoUrls
+  const mediaCount = imageFiles.length + (videoFile ? 1 : 0)
+  const hasVideo = !!videoFile
 
   const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['feed']
   const { data: learnedExamples } = await supabase
@@ -59,7 +78,7 @@ export async function POST(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const prompt = buildFeedPrompt(profile, tone, imageFiles.length, learnedExamples ?? [])
+  const prompt = buildFeedPrompt(profile, tones, mediaCount, hasVideo, learnedExamples ?? [])
 
   let text: string
   try {
@@ -69,31 +88,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 
-  let draft: FeedDraft
+  let drafts: FeedDraft[]
   try {
-    draft = parseJSON(text)
+    const parsed = parseJSON(text)
+    drafts = Array.isArray(parsed) ? parsed : [parsed, parsed]
   } catch {
     return NextResponse.json({ error: 'AI 응답 파싱 실패. 다시 시도해주세요.' }, { status: 500 })
   }
 
-  // DB 저장
-  const mediaOrder = draft.slide_order.map((idx: number) => ({
-    index: idx,
-    url: uploadedUrls[idx] ?? uploadedUrls[0],
-    description: draft.slide_descriptions[idx] ?? '',
+  const insertData = drafts.map(d => ({
+    user_id: user.id,
+    platform: 'instagram' as const,
+    content_type: 'feed' as const,
+    tone: d.tone ?? tones[0],
+    caption: d.caption,
+    hashtags: d.hashtags,
+    media_urls: allUrls,
+    media_order: (d.slide_order ?? []).map((idx: number) => ({
+      index: idx,
+      url: allUrls[idx] ?? allUrls[0],
+      description: d.slide_descriptions?.[idx] ?? '',
+    })),
+    status: 'draft' as const,
   }))
 
-  const { data: saved } = await supabase.from('contents').insert({
-    user_id: user.id,
-    platform: 'instagram',
-    content_type: 'feed',
-    tone,
-    caption: draft.caption,
-    hashtags: draft.hashtags,
-    media_urls: uploadedUrls,
-    media_order: mediaOrder,
-    status: 'draft',
-  }).select().single()
+  const { data: saved } = await supabase.from('contents').insert(insertData).select()
 
-  return NextResponse.json({ draft: { ...draft, id: saved?.id, media_urls: uploadedUrls } })
+  return NextResponse.json({
+    drafts: drafts.map((d, i) => ({ ...d, id: saved?.[i]?.id, media_urls: allUrls }))
+  })
 }
