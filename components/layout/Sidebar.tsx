@@ -1,27 +1,40 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Link2, Settings2, PenSquare,
-  CalendarDays, BarChart2, Zap, LogOut
+  CalendarDays, BarChart2, Zap, LogOut,
+  ChevronDown, MessageSquare, Image, Film
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createBrowserSupabase } from '@/lib/supabase-browser'
 
-const nav = [
+const CREATE_SUB = [
+  { href: '/create/threads', label: '스레드', icon: MessageSquare },
+  { href: '/create/feed',    label: '피드',   icon: Image },
+  { href: '/create/reels',   label: '릴스',   icon: Film },
+]
+
+const NAV_TOP = [
   { href: '/dashboard', label: '대시보드', icon: LayoutDashboard },
-  { href: '/connect', label: '계정 연결', icon: Link2 },
-  { href: '/setup', label: '업종 분석', icon: Settings2 },
-  { href: '/create', label: '콘텐츠 만들기', icon: PenSquare },
-  { href: '/calendar', label: '예약 캘린더', icon: CalendarDays },
-  { href: '/analytics', label: '성과 분석', icon: BarChart2 },
+  { href: '/connect',   label: '계정 연결', icon: Link2 },
+  { href: '/setup',     label: '업종 분석', icon: Settings2 },
+]
+
+const NAV_BOTTOM = [
+  { href: '/calendar',  label: '예약 캘린더', icon: CalendarDays },
+  { href: '/analytics', label: '성과 분석',   icon: BarChart2 },
 ]
 
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createBrowserSupabase()
+
+  const isCreateActive = pathname.startsWith('/create')
+  const [createOpen, setCreateOpen] = useState(isCreateActive)
 
   async function signOut() {
     await supabase.auth.signOut()
@@ -40,17 +53,69 @@ export default function Sidebar() {
 
       {/* 네비게이션 */}
       <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-        {nav.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
+        {/* 상단 메뉴 */}
+        {NAV_TOP.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
           return (
             <Link
               key={href}
               href={href}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
-                active
-                  ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              )}
+            >
+              <Icon className="w-4 h-4 flex-shrink-0" />
+              {label}
+            </Link>
+          )
+        })}
+
+        {/* 콘텐츠 만들기 (아코디언) */}
+        <button
+          onClick={() => setCreateOpen(v => !v)}
+          className={cn(
+            'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+            isCreateActive ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          )}
+        >
+          <PenSquare className="w-4 h-4 flex-shrink-0" />
+          <span className="flex-1 text-left">콘텐츠 만들기</span>
+          <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', createOpen ? 'rotate-180' : '')} />
+        </button>
+
+        {/* 하위 메뉴 */}
+        {createOpen && (
+          <div className="ml-3 pl-3 border-l border-gray-100 space-y-0.5">
+            {CREATE_SUB.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || pathname.startsWith(href)
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+                    active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                  )}
+                >
+                  <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                  {label}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 하단 메뉴 */}
+        {NAV_BOTTOM.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
+                active ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               )}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
