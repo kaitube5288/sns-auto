@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
   const durationSec = parseInt((formData.get('duration') as string) || '30')
   const mode = (formData.get('mode') as string) || 'solo'
   const frames = formData.getAll('frames') as File[]
-  const videoFile = formData.get('video') as File | null
 
   const { data: profile } = await supabase
     .from('business_profiles')
@@ -33,19 +32,7 @@ export async function POST(req: NextRequest) {
     frameBase64List.push(`data:image/jpeg;base64,${Buffer.from(ab).toString('base64')}`)
   }
 
-  // 영상 Storage 업로드
-  let videoUrl: string | undefined
-  if (videoFile) {
-    const ab = await videoFile.arrayBuffer()
-    const path = `${user.id}/media/${Date.now()}-${videoFile.name}`
-    const { data: uploaded } = await supabase.storage
-      .from('media')
-      .upload(path, ab, { contentType: videoFile.type, upsert: true })
-    if (uploaded) {
-      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
-      videoUrl = publicUrl
-    }
-  }
+  // 영상 파일은 클라이언트에서 /api/media/upload로 별도 업로드 (크기 제한 우회)
 
   const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['reels']
   const { data: learnedExamples } = await supabase
@@ -78,7 +65,7 @@ export async function POST(req: NextRequest) {
     platform: 'instagram',
     content_type: 'reels',
     reels_plan: plan,
-    media_urls: videoUrl ? [videoUrl] : [],
+    media_urls: [],
     status: 'draft',
   }).select().single()
 

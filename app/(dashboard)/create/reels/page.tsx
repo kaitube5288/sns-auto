@@ -60,7 +60,6 @@ export default function ReelsCreatePage() {
       setCapturedFrames(captured)
 
       const formData = new FormData()
-      formData.append('video', videoFile)
       formData.append('intent', intent || '제품 소개')
       formData.append('duration', String(duration))
       formData.append('mode', mode)
@@ -70,6 +69,14 @@ export default function ReelsCreatePage() {
       const data = await res.json()
       if (data.error) { alert(data.error); return }
       setPlan(data.plan)
+
+      // 영상 파일은 별도 업로드 (크기 제한 우회)
+      if (data.plan?.id) {
+        const vfd = new FormData()
+        vfd.append('images', videoFile)
+        vfd.append('content_id', data.plan.id)
+        fetch('/api/media/upload', { method: 'POST', body: vfd }).catch(() => {})
+      }
     } catch {
       alert('생성 중 오류가 발생했습니다.')
     } finally {
