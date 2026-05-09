@@ -16,10 +16,10 @@ export async function POST(req: NextRequest) {
   const tones: ContentTone[] = tonesRaw ? JSON.parse(tonesRaw) : ['인스타감성형']
   const mode = (formData.get('mode') as string) || 'solo'
   const imageFiles = formData.getAll('images') as File[]
-  const videoFile = formData.get('video') as File | null
+  const hasVideo = formData.get('has_video') === '1'
   const videoFrameFiles = formData.getAll('video_frames') as File[]
 
-  if (imageFiles.length === 0 && !videoFile) {
+  if (imageFiles.length === 0 && !hasVideo) {
     return NextResponse.json({ error: '이미지 또는 동영상을 업로드해주세요.' }, { status: 400 })
   }
 
@@ -47,27 +47,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 동영상 → Storage 업로드
-  let videoUrl: string | null = null
-  if (videoFile) {
-    const ab = await videoFile.arrayBuffer()
-    const path = `${user.id}/media/${Date.now()}-${videoFile.name}`
-    const { data: uploaded } = await supabase.storage
-      .from('media').upload(path, ab, { contentType: videoFile.type, upsert: true })
-    if (uploaded) {
-      const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path)
-      videoUrl = publicUrl
-    }
-    // 동영상 프레임을 AI 분석용으로 추가 (슬라이드 인덱스에는 미포함)
-    for (const frame of videoFrameFiles) {
-      const fab = await frame.arrayBuffer()
-      imageBase64List.push(`data:image/jpeg;base64,${Buffer.from(fab).toString('base64')}`)
-    }
+  // 동영상 프레임 → AI 분석용 (동영상 파일 자체는 클라이언트에서 별도 업로드)
+  for (const frame of videoFrameFiles) {
+    const fab = await frame.arrayBuffer()
+    imageBase64List.push(`data:image/jpeg;base64,${Buffer.from(fab).toString('base64')}`)
   }
 
-  const allUrls = videoUrl ? [...uploadedPhotoUrls, videoUrl] : uploadedPhotoUrls
-  const mediaCount = imageFiles.length + (videoFile ? 1 : 0)
-  const hasVideo = !!videoFile
+  const allUrls = uploadedPhotoUrls  // 동영상 URL은 클라이언트의 /api/media/upload 호출로 추가됨
+  const mediaCount = imageFiles.length + (hasVideo ? 1 : 0)
 
   const sections = mode === 'combined' ? ['threads', 'feed', 'reels'] : ['feed']
   const { data: learnedExamples } = await supabase

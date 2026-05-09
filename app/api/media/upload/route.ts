@@ -26,9 +26,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 콘텐츠 레코드에 미디어 URL 업데이트
+  // 기존 media_urls에 추가 (덮어쓰지 않음)
   if (contentId && urls.length > 0) {
-    await supabase.from('contents').update({ media_urls: urls }).eq('id', contentId).eq('user_id', user.id)
+    const { data: existing } = await supabase.from('contents').select('media_urls').eq('id', contentId).eq('user_id', user.id).single()
+    const merged = [...(existing?.media_urls ?? []), ...urls]
+    await supabase.from('contents').update({ media_urls: merged }).eq('id', contentId).eq('user_id', user.id)
   }
 
   return NextResponse.json({ urls })

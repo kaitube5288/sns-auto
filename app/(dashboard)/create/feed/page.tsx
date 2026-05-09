@@ -178,7 +178,7 @@ export default function FeedCreatePage() {
       fd.append('mode', mode)
       photos.forEach(f => fd.append('images', f))
       if (video) {
-        fd.append('video', video)
+        fd.append('has_video', '1')
         videoFrames.forEach((frame, i) => {
           fd.append('video_frames', new File([dataURLToBlob(frame)], `frame${i}.jpg`, { type: 'image/jpeg' }))
         })
@@ -190,6 +190,17 @@ export default function FeedCreatePage() {
       setSelectedDraft(0)
       if (data.drafts[0]?.slide_order?.length) {
         setSlideOrder(data.drafts[0].slide_order)
+      }
+      // 동영상 파일은 별도로 업로드 (크기 제한 우회)
+      if (video && data.drafts) {
+        for (const draft of data.drafts) {
+          if (draft.id) {
+            const vfd = new FormData()
+            vfd.append('images', video)
+            vfd.append('content_id', draft.id)
+            fetch('/api/media/upload', { method: 'POST', body: vfd }).catch(() => {})
+          }
+        }
       }
     } catch {
       alert('생성 중 오류가 발생했습니다.')
