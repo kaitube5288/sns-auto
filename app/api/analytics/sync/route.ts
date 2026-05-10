@@ -38,6 +38,14 @@ export async function POST(_req: NextRequest) {
     for (const c of (igContents ?? [])) {
       try {
         const insights = await getIGMediaInsights(c.instagram_post_id!, igToken)
+        // 삭제된 게시물이거나 API 에러인 경우 스킵 + DB에서 제거
+        if (insights?.error) {
+          await supabase.from('post_analytics')
+            .delete()
+            .eq('platform', 'instagram')
+            .eq('post_id', c.instagram_post_id!)
+          continue
+        }
         const metrics = insights?.data ?? []
         const get = (name: string) => metrics.find((m: { name: string; values: { value: number }[] }) => m.name === name)?.values?.[0]?.value ?? 0
         const reach = get('reach')
@@ -81,6 +89,14 @@ export async function POST(_req: NextRequest) {
     for (const c of (threadsContents ?? [])) {
       try {
         const insights = await getThreadsMediaInsights(c.threads_post_id!, threadsToken)
+        // 삭제된 게시물이거나 API 에러인 경우 스킵 + DB에서 제거
+        if (insights?.error) {
+          await supabase.from('post_analytics')
+            .delete()
+            .eq('platform', 'threads')
+            .eq('post_id', c.threads_post_id!)
+          continue
+        }
         const metrics = insights?.data ?? []
         const get = (name: string) => {
           const m = metrics.find((x: { name: string; values?: { value: number }[]; value?: number }) => x.name === name)

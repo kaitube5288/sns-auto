@@ -23,7 +23,7 @@ function buildThreadsOAuthUrl(state: string) {
   const params = new URLSearchParams({
     client_id: process.env.THREADS_APP_ID!,
     redirect_uri: process.env.META_REDIRECT_URI!,
-    scope: 'threads_basic,threads_content_publish',
+    scope: 'threads_basic,threads_content_publish,threads_manage_insights',
     state,
     response_type: 'code',
   })

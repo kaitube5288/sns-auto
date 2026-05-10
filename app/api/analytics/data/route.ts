@@ -13,8 +13,9 @@ export async function GET() {
     .order('synced_at', { ascending: false })
     .limit(60)
 
-  const instagram = (all ?? []).filter(a => a.platform === 'instagram')
-  const threads = (all ?? []).filter(a => a.platform === 'threads')
+  const hasMetrics = (a: Record<string, number>) => a.reach > 0 || a.likes > 0 || a.comments > 0 || a.saves > 0
+  const instagram = (all ?? []).filter(a => a.platform === 'instagram' && hasMetrics(a))
+  const threads = (all ?? []).filter(a => a.platform === 'threads' && hasMetrics(a))
 
   return NextResponse.json({
     instagram,
