@@ -174,7 +174,17 @@ export async function getThreadsProfile(accessToken: string) {
   const res = await fetch(
     `${THREADS_BASE}/me?fields=id,username,followers_count&access_token=${accessToken}`
   )
-  return res.json() as Promise<{ id: string; username: string; followers_count: number }>
+  return res.json() as Promise<{ id: string; username: string; followers_count?: number; error?: { message: string } }>
+}
+
+// Threads 유저 인사이트 (팔로워 수 등 — threads_manage_insights 권한)
+export async function getThreadsUserInsights(userId: string, accessToken: string, metric: string) {
+  const since = Math.floor((Date.now() - 2 * 24 * 60 * 60 * 1000) / 1000)
+  const until = Math.floor(Date.now() / 1000)
+  const res = await fetch(
+    `${THREADS_BASE}/${userId}/threads_insights?metric=${metric}&period=day&since=${since}&until=${until}&access_token=${accessToken}`
+  )
+  return res.json()
 }
 
 // Threads 게시물 댓글(답글) 조회
