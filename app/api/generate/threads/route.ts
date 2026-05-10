@@ -157,10 +157,10 @@ export async function GET() {
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
   const { data: draftsData } = await supabase
     .from('contents')
-    .select('id, tone, caption, hashtags, created_at, status, is_bookmarked')
+    .select('id, tone, caption, hashtags, created_at, status, scheduled_at, is_bookmarked')
     .eq('user_id', user.id)
     .eq('content_type', 'threads_text')
-    .in('status', ['draft', 'confirmed'])
+    .in('status', ['draft', 'confirmed', 'scheduled'])
     .eq('is_bookmarked', false)
     .gte('created_at', threeDaysAgo)
     .order('created_at', { ascending: false })
@@ -168,7 +168,7 @@ export async function GET() {
 
   const { data: savedData } = await supabase
     .from('contents')
-    .select('id, tone, caption, hashtags, created_at, status, is_bookmarked')
+    .select('id, tone, caption, hashtags, created_at, status, scheduled_at, is_bookmarked')
     .eq('user_id', user.id)
     .eq('content_type', 'threads_text')
     .in('status', ['draft', 'confirmed'])

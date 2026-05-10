@@ -21,7 +21,7 @@ const EMOJI_GROUPS = [
   { label: '반응', emojis: ['❤️', '💕', '🔥', '💯', '🎉', '✅', '👏', '💪', '🙌', '⭐'] },
 ]
 
-interface DraftWithId extends ThreadsDraft { id?: string; created_at?: string }
+interface DraftWithId extends ThreadsDraft { id?: string; created_at?: string; status?: string; scheduled_at?: string }
 interface SessionGroup { key: string; label: string; drafts: DraftWithId[] }
 
 function groupBySession(drafts: DraftWithId[]): SessionGroup[] {
@@ -82,13 +82,15 @@ export default function ThreadsCreatePage() {
     fetch('/api/generate/threads')
       .then(r => r.json())
       .then(data => {
-        const toItem = (d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
+        const toItem = (d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string; status?: string; scheduled_at?: string }) => ({
           tone: d.tone ?? undefined,
           caption: d.caption ?? '',
           hashtags: d.hashtags ?? [],
           engagement_hook: '',
           id: d.id,
           created_at: d.created_at,
+          status: d.status,
+          scheduled_at: d.scheduled_at,
         })
         if (data.drafts?.length) {
           const loaded = data.drafts.map(toItem)
@@ -585,6 +587,14 @@ function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, re
         </div>
       )}
 
+      {draft.status === 'scheduled' && draft.scheduled_at && (
+        <div className="flex items-center gap-1.5 mb-2 px-2.5 py-1.5 bg-green-50 border border-green-100 rounded-xl">
+          <Clock className="w-3 h-3 text-green-500 flex-shrink-0" />
+          <span className="text-xs text-green-700 font-medium">
+            예약됨 · {new Date(draft.scheduled_at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-medium text-gray-400">#{displayIdx}</span>
