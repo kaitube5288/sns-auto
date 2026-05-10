@@ -10,11 +10,15 @@ export async function getIGUserInfo(accessToken: string) {
   return res.json()
 }
 
-export async function exchangeLongLivedToken(shortToken: string) {
+export async function exchangeLongLivedToken(
+  shortToken: string,
+  clientId = process.env.META_APP_ID!,
+  clientSecret = process.env.META_APP_SECRET!,
+) {
   const params = new URLSearchParams({
     grant_type: 'fb_exchange_token',
-    client_id: process.env.META_APP_ID!,
-    client_secret: process.env.META_APP_SECRET!,
+    client_id: clientId,
+    client_secret: clientSecret,
     fb_exchange_token: shortToken,
   })
   const res = await fetch(`${IG_BASE}/oauth/access_token?${params}`)

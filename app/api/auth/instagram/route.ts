@@ -20,7 +20,7 @@ export async function GET() {
 function buildIGOAuthUrl(state: string) {
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/instagram/callback`
   const params = new URLSearchParams({
-    client_id: process.env.META_APP_ID!,
+    client_id: process.env.INSTAGRAM_APP_ID!,
     redirect_uri: redirectUri,
     scope: 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights',
     state,

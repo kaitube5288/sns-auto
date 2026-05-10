@@ -28,8 +28,8 @@ export async function GET(req: NextRequest) {
   try {
     // 1. 단기 토큰 교환
     const tokenParams = new URLSearchParams({
-      client_id: process.env.META_APP_ID!,
-      client_secret: process.env.META_APP_SECRET!,
+      client_id: process.env.INSTAGRAM_APP_ID!,
+      client_secret: process.env.INSTAGRAM_APP_SECRET!,
       redirect_uri: redirectUri,
       code: code!,
     })
@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     const shortToken = tokenData.access_token
 
     // 2. 60일 장기 토큰 교환
-    const longTokenData = await exchangeLongLivedToken(shortToken)
+    const longTokenData = await exchangeLongLivedToken(shortToken, process.env.INSTAGRAM_APP_ID!, process.env.INSTAGRAM_APP_SECRET!)
     if (!longTokenData.access_token) throw new Error('장기 토큰 교환 실패')
     const longToken = longTokenData.access_token
     const expiresAt = new Date(Date.now() + longTokenData.expires_in * 1000).toISOString()
