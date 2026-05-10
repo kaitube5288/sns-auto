@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
-import { exchangeLongLivedToken, getIGUserInfo, getThreadsUserInfo } from '@/lib/meta-api'
+import { getThreadsUserInfo } from '@/lib/meta-api'
 import { encryptToken } from '@/lib/utils'
 
-const IG_BASE = 'https://graph.facebook.com/v21.0'
+const THREADS_TOKEN_URL = 'https://graph.threads.net/oauth/access_token'
+const THREADS_LONG_TOKEN_URL = 'https://graph.threads.net/access_token'
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL!
 
 export async function GET(req: NextRequest) {
@@ -25,51 +26,51 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.redirect(`${APP_URL}/login`)
 
   try {
-    // 1. 단기 토큰 교환
-    const tokenParams = new URLSearchParams({
-      client_id: process.env.META_APP_ID!,
-      client_secret: process.env.META_APP_SECRET!,
-      redirect_uri: process.env.META_REDIRECT_URI!,
-      code: code!,
+    // 1. 단기 토큰 교환 (Threads OAuth)
+    const tokenRes = await fetch(THREADS_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.THREADS_APP_ID!,
+        client_secret: process.env.THREADS_APP_SECRET!,
+        redirect_uri: process.env.META_REDIRECT_URI!,
+        code: code!,
+        grant_type: 'authorization_code',
+      }),
     })
-    const tokenRes = await fetch(`${IG_BASE}/oauth/access_token?${tokenParams}`)
-    const { access_token: shortToken } = await tokenRes.json()
+    const tokenData = await tokenRes.json()
+    if (tokenData.error) throw new Error(tokenData.error.message ?? 'Token exchange failed')
+    const shortToken = tokenData.access_token
 
     // 2. 60일 장기 토큰 교환
-    const longTokenData = await exchangeLongLivedToken(shortToken)
+    const longTokenRes = await fetch(
+      `${THREADS_LONG_TOKEN_URL}?grant_type=th_exchange_token&client_id=${process.env.THREADS_APP_ID}&client_secret=${process.env.THREADS_APP_SECRET}&access_token=${shortToken}`
+    )
+    const longTokenData = await longTokenRes.json()
+    if (longTokenData.error) throw new Error(longTokenData.error.message ?? 'Long token exchange failed')
     const longToken = longTokenData.access_token
     const expiresAt = new Date(Date.now() + longTokenData.expires_in * 1000).toISOString()
 
-    // 3. Facebook Page → Instagram 비즈니스 계정 조회
-    const pagesData = await getIGUserInfo(longToken)
-    const page = pagesData?.data?.[0]
-    const igAccount = page?.instagram_business_account
-
-    // 4. Threads 계정 조회
+    // 3. Threads 계정 정보 조회
     const threadsData = await getThreadsUserInfo(longToken)
+    if (!threadsData?.id) throw new Error('Threads 계정 정보를 가져올 수 없습니다.')
 
-    // 5. DB upsert (토큰 암호화)
+    // 4. DB upsert (토큰 암호화)
     const encryptedToken = encryptToken(longToken)
     await supabase.from('meta_accounts').upsert({
       user_id: user.id,
-      instagram_user_id: igAccount?.id ?? null,
-      instagram_username: igAccount?.username ?? null,
-      instagram_access_token: encryptedToken,
-      instagram_token_expires_at: expiresAt,
-      instagram_connected: !!igAccount?.id,
-      threads_user_id: threadsData?.id ?? null,
-      threads_username: threadsData?.username ?? null,
+      threads_user_id: threadsData.id,
+      threads_username: threadsData.username,
       threads_access_token: encryptedToken,
       threads_token_expires_at: expiresAt,
-      threads_connected: !!threadsData?.id,
-      facebook_page_id: page?.id ?? null,
+      threads_connected: true,
     }, { onConflict: 'user_id' })
 
     const response = NextResponse.redirect(`${APP_URL}/connect?success=1`)
     response.cookies.delete('meta_oauth_state')
     return response
   } catch (err) {
-    console.error('Meta OAuth callback error:', err)
+    console.error('Threads OAuth callback error:', err)
     return NextResponse.redirect(`${APP_URL}/connect?error=token_exchange_failed`)
   }
 }

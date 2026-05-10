@@ -8,8 +8,7 @@ export async function GET() {
 
   const state = crypto.randomUUID()
 
-  // state를 쿠키에 임시 저장 (CSRF 방지)
-  const response = NextResponse.redirect(buildMetaOAuthUrl(state))
+  const response = NextResponse.redirect(buildThreadsOAuthUrl(state))
   response.cookies.set('meta_oauth_state', state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -19,19 +18,14 @@ export async function GET() {
   return response
 }
 
-function buildMetaOAuthUrl(state: string) {
+// Threads API uses its own OAuth endpoint (separate from Facebook OAuth)
+function buildThreadsOAuthUrl(state: string) {
   const params = new URLSearchParams({
-    client_id: process.env.META_APP_ID!,
+    client_id: process.env.THREADS_APP_ID!,
     redirect_uri: process.env.META_REDIRECT_URI!,
-    scope: [
-      'instagram_basic',
-      'instagram_content_publish',
-      'instagram_manage_insights',
-      'threads_basic',
-      'threads_content_publish',
-    ].join(','),
+    scope: 'threads_basic,threads_content_publish',
     state,
     response_type: 'code',
   })
-  return `https://www.facebook.com/v21.0/dialog/oauth?${params}`
+  return `https://threads.net/oauth/authorize?${params}`
 }
