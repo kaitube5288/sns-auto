@@ -17,6 +17,7 @@ export async function GET() {
   return response
 }
 
+// Instagram Business API uses its own OAuth endpoint (separate from Facebook OAuth)
 function buildIGOAuthUrl(state: string) {
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/instagram/callback`
   const params = new URLSearchParams({
@@ -26,5 +27,5 @@ function buildIGOAuthUrl(state: string) {
     state,
     response_type: 'code',
   })
-  return `https://www.facebook.com/v21.0/dialog/oauth?${params}`
+  return `https://api.instagram.com/oauth/authorize?${params}`
 }
