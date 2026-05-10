@@ -100,7 +100,7 @@ export async function getThreadsUserInfo(accessToken: string) {
   return res.json()
 }
 
-// Threads 텍스트 컨테이너 생성
+// Threads 텍스트/단일이미지 컨테이너 생성
 export async function createThreadsContainer(threadsUserId: string, accessToken: string, text: string, mediaUrl?: string) {
   const body: Record<string, string> = {
     media_type: mediaUrl ? 'IMAGE' : 'TEXT',
@@ -113,6 +113,36 @@ export async function createThreadsContainer(threadsUserId: string, accessToken:
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  })
+  return res.json() as Promise<{ id: string }>
+}
+
+// Threads 캐러셀 아이템 컨테이너 생성 (이미지 각각)
+export async function createThreadsCarouselItem(threadsUserId: string, accessToken: string, imageUrl: string) {
+  const res = await fetch(`${THREADS_BASE}/${threadsUserId}/threads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      media_type: 'IMAGE',
+      image_url: imageUrl,
+      is_carousel_item: true,
+      access_token: accessToken,
+    }),
+  })
+  return res.json() as Promise<{ id: string }>
+}
+
+// Threads 캐러셀 컨테이너 생성
+export async function createThreadsCarouselContainer(threadsUserId: string, accessToken: string, childIds: string[], text: string) {
+  const res = await fetch(`${THREADS_BASE}/${threadsUserId}/threads`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      media_type: 'CAROUSEL',
+      children: childIds.join(','),
+      text,
+      access_token: accessToken,
+    }),
   })
   return res.json() as Promise<{ id: string }>
 }

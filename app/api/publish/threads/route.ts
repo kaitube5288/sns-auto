@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
-import { createThreadsContainer, publishThreads, checkThreadsStatus } from '@/lib/meta-api'
+import { createThreadsContainer, createThreadsCarouselItem, createThreadsCarouselContainer, publishThreads, checkThreadsStatus } from '@/lib/meta-api'
 import { decryptToken } from '@/lib/utils'
 import { hashtagsToString } from '@/lib/utils'
 
@@ -52,23 +52,44 @@ export async function POST(req: NextRequest) {
   // publishing 상태로 변경
   await supabase.from('contents').update({ status: 'publishing' }).eq('id', content_id)
 
+  const mediaUrls: string[] = content.media_urls ?? []
+
   try {
-    // 1. 컨테이너 생성
-    const container = await createThreadsContainer(account.threads_user_id, accessToken, fullText)
-    if (!container.id) throw new Error('컨테이너 생성 실패')
+    // 1. 컨테이너 생성 (이미지 수에 따라 TEXT / 단일이미지 / 캐러셀 분기)
+    let containerId: string
+    if (mediaUrls.length === 0) {
+      const c = await createThreadsContainer(account.threads_user_id, accessToken, fullText)
+      if (!c.id) throw new Error('컨테이너 생성 실패')
+      containerId = c.id
+    } else if (mediaUrls.length === 1) {
+      const c = await createThreadsContainer(account.threads_user_id, accessToken, fullText, mediaUrls[0])
+      if (!c.id) throw new Error('이미지 컨테이너 생성 실패')
+      containerId = c.id
+    } else {
+      // 캐러셀: 각 이미지 아이템 생성 후 캐러셀 컨테이너 생성
+      const childIds: string[] = []
+      for (const url of mediaUrls) {
+        const item = await createThreadsCarouselItem(account.threads_user_id, accessToken, url)
+        if (!item.id) throw new Error('캐러셀 아이템 생성 실패')
+        childIds.push(item.id)
+      }
+      const c = await createThreadsCarouselContainer(account.threads_user_id, accessToken, childIds, fullText)
+      if (!c.id) throw new Error('캐러셀 컨테이너 생성 실패')
+      containerId = c.id
+    }
 
     // 2. 준비 완료 대기 (최대 30초)
     let ready = false
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 3000))
-      const status = await checkThreadsStatus(container.id, accessToken)
+      const status = await checkThreadsStatus(containerId, accessToken)
       if (status.status === 'FINISHED') { ready = true; break }
       if (status.status === 'ERROR') throw new Error(status.error_message ?? '준비 실패')
     }
     if (!ready) throw new Error('타임아웃: 준비 완료 대기 실패')
 
     // 3. 발행
-    const published = await publishThreads(account.threads_user_id, accessToken, container.id)
+    const published = await publishThreads(account.threads_user_id, accessToken, containerId)
     if (!published.id) throw new Error('발행 실패')
 
     await supabase.from('contents').update({
