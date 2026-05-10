@@ -14,6 +14,13 @@ const TONES: { value: ContentTone; label: string; emoji: string }[] = [
   { value: '고객소통형', label: '고객소통형', emoji: '💬' },
 ]
 
+const EMOJI_GROUPS = [
+  { label: '감성', emojis: ['✨', '🌸', '🍀', '🌿', '🌙', '☀️', '🌈', '💫', '🌺', '🌻'] },
+  { label: '카페·음식', emojis: ['☕', '🍵', '🧋', '🍰', '🧁', '🍩', '🥐', '🍫', '🍪', '🥧'] },
+  { label: '표정', emojis: ['😊', '🥰', '😋', '🤗', '😍', '😌', '🫶', '🙏', '😎', '🥹'] },
+  { label: '반응', emojis: ['❤️', '💕', '🔥', '💯', '🎉', '✅', '👏', '💪', '🙌', '⭐'] },
+]
+
 interface DraftWithId extends ThreadsDraft { id?: string; created_at?: string }
 interface SessionGroup { key: string; label: string; drafts: DraftWithId[] }
 
@@ -454,6 +461,24 @@ interface DraftCardProps {
 
 function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating }: DraftCardProps) {
   const hasPendingChange = pendingTone !== null && pendingTone !== draft.tone
+  const [showEmoji, setShowEmoji] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  function insertEmoji(emoji: string) {
+    const ta = textareaRef.current
+    const start = ta?.selectionStart ?? draft.caption.length
+    const end = ta?.selectionEnd ?? draft.caption.length
+    const newCaption = draft.caption.slice(0, start) + emoji + draft.caption.slice(end)
+    onUpdate(newCaption)
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.selectionStart = start + emoji.length
+        textareaRef.current.selectionEnd = start + emoji.length
+        textareaRef.current.focus()
+      }
+    }, 0)
+    setShowEmoji(false)
+  }
 
   return (
     <div
@@ -477,12 +502,44 @@ function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, re
             </span>
           )}
         </div>
-        <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-          <Copy className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={e => { e.stopPropagation(); setShowEmoji(v => !v) }}
+            className={`p-1.5 rounded-lg text-base leading-none transition-colors ${showEmoji ? 'bg-amber-100' : 'hover:bg-gray-100'}`}
+            title="이모티콘"
+          >
+            😊
+          </button>
+          <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <Copy className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
+      {/* 이모티콘 팔레트 */}
+      {showEmoji && (
+        <div className="mb-2 p-2 bg-gray-50 rounded-xl border border-gray-100" onClick={e => e.stopPropagation()}>
+          {EMOJI_GROUPS.map(group => (
+            <div key={group.label} className="mb-1.5 last:mb-0">
+              <p className="text-[10px] text-gray-400 mb-1">{group.label}</p>
+              <div className="flex flex-wrap gap-0.5">
+                {group.emojis.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => insertEmoji(emoji)}
+                    className="text-lg w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white transition-colors"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <textarea
+        ref={textareaRef}
         value={draft.caption}
         onChange={e => { e.stopPropagation(); onUpdate(e.target.value) }}
         onClick={e => { e.stopPropagation(); onSelect() }}
