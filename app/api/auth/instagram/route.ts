@@ -23,9 +23,9 @@ function buildIGOAuthUrl(state: string) {
   const params = new URLSearchParams({
     client_id: process.env.INSTAGRAM_APP_ID!,
     redirect_uri: redirectUri,
-    scope: 'instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights',
+    scope: 'instagram_business_basic',
     state,
     response_type: 'code',
   })
-  return `https://api.instagram.com/oauth/authorize?${params}`
+  return `https://www.instagram.com/oauth/authorize?${params}`
 }
