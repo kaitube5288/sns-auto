@@ -120,6 +120,22 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ drafts: drafts.map((d, i) => ({ ...d, id: saved?.[i]?.id, created_at: saved?.[i]?.created_at })) })
 }
 
+export async function PATCH(req: NextRequest) {
+  const supabase = await createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id, caption, tone } = await req.json()
+  if (!id) return NextResponse.json({ error: '잘못된 요청' }, { status: 400 })
+
+  const updates: Record<string, unknown> = {}
+  if (caption !== undefined) updates.caption = caption
+  if (tone !== undefined) updates.tone = tone
+
+  await supabase.from('contents').update(updates).eq('id', id).eq('user_id', user.id)
+  return NextResponse.json({ ok: true })
+}
+
 export async function GET() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()

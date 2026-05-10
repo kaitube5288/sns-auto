@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2 } from 'lucide-react'
+import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2, ChevronDown, ChevronRight } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
 import LearnSection from '@/components/create/LearnSection'
@@ -15,16 +15,37 @@ const TONES: { value: ContentTone; label: string; emoji: string }[] = [
 ]
 
 interface DraftWithId extends ThreadsDraft { id?: string; created_at?: string }
+interface SessionGroup { key: string; label: string; drafts: DraftWithId[] }
 
-function relativeDate(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const min = Math.floor(diff / 60000)
-  if (min < 2) return '방금 전'
-  if (min < 60) return `${min}분 전`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}시간 전`
-  const day = Math.floor(hr / 24)
-  return `${day}일 전`
+function groupBySession(drafts: DraftWithId[]): SessionGroup[] {
+  if (!drafts.length) return []
+  const sorted = [...drafts].sort(
+    (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+  )
+  const groups: SessionGroup[] = []
+  for (const draft of sorted) {
+    const t = new Date(draft.created_at ?? 0).getTime()
+    const last = groups[groups.length - 1]
+    if (last && new Date(last.key).getTime() - t < 5 * 60 * 1000) {
+      last.drafts.push(draft)
+    } else {
+      const key = draft.created_at ?? new Date().toISOString()
+      groups.push({ key, label: sessionLabel(key), drafts: [draft] })
+    }
+  }
+  return groups
+}
+
+function sessionLabel(dateStr: string): string {
+  const kst = new Date(new Date(dateStr).getTime() + 9 * 60 * 60 * 1000)
+  const nowKst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const dateOnly = kst.toISOString().slice(0, 10)
+  const todayStr = nowKst.toISOString().slice(0, 10)
+  const yestStr = new Date(nowKst.getTime() - 86400000).toISOString().slice(0, 10)
+  const hhmm = kst.toISOString().slice(11, 16)
+  if (dateOnly === todayStr) return `오늘 ${hhmm}`
+  if (dateOnly === yestStr) return `어제 ${hhmm}`
+  return `${kst.getMonth() + 1}월 ${kst.getDate()}일 ${hhmm}`
 }
 
 export default function ThreadsCreatePage() {
@@ -33,89 +54,134 @@ export default function ThreadsCreatePage() {
   const [contextNote, setContextNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [drafts, setDrafts] = useState<DraftWithId[]>([])
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   const [publishing, setPublishing] = useState(false)
   const [scheduleMode, setScheduleMode] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
   const [toast, setToast] = useState('')
-  const [refineInstructions, setRefineInstructions] = useState<Record<number, string>>({})
-  const [refiningIdx, setRefiningIdx] = useState<number | null>(null)
-  const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null)
-  const [pendingTones, setPendingTones] = useState<Record<number, ContentTone | null>>({})
+  const [refineInstructions, setRefineInstructions] = useState<Record<string, string>>({})
+  const [refiningId, setRefiningId] = useState<string | null>(null)
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
+  const [pendingTones, setPendingTones] = useState<Record<string, ContentTone | null>>({})
   const [publishImages, setPublishImages] = useState<File[]>([])
   const [publishPreviews, setPublishPreviews] = useState<string[]>([])
   const publishImageRef = useRef<HTMLInputElement>(null)
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
 
   useEffect(() => {
     fetch('/api/generate/threads')
       .then(r => r.json())
       .then(data => {
-        if (data.drafts?.length) {
-          setDrafts(data.drafts.map((d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
-            tone: d.tone ?? undefined,
-            caption: d.caption ?? '',
-            hashtags: d.hashtags ?? [],
-            engagement_hook: '',
-            id: d.id,
-            created_at: d.created_at,
-          })))
-          setSelected(0)
+        if (!data.drafts?.length) return
+        const loaded: DraftWithId[] = data.drafts.map((d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
+          tone: d.tone ?? undefined,
+          caption: d.caption ?? '',
+          hashtags: d.hashtags ?? [],
+          engagement_hook: '',
+          id: d.id,
+          created_at: d.created_at,
+        }))
+        setDrafts(loaded)
+        const groups = groupBySession(loaded)
+        if (groups[0]) {
+          setOpenGroups(new Set([groups[0].key]))
+          setSelectedId(loaded[0]?.id ?? null)
         }
       })
       .catch(() => {})
   }, [])
 
-  function updateDraft(i: number, caption: string) {
-    setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
+  function updateDraft(id: string, caption: string) {
+    setDrafts(prev => prev.map(d => d.id === id ? { ...d, caption } : d))
+    clearTimeout(saveTimers.current[id])
+    saveTimers.current[id] = setTimeout(() => {
+      fetch('/api/generate/threads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, caption }),
+      }).catch(() => {})
+    }, 1000)
   }
 
-  async function refine(i: number) {
-    const instruction = refineInstructions[i]?.trim()
+  async function refine(id: string) {
+    const instruction = refineInstructions[id]?.trim()
     if (!instruction) return
-    setRefiningIdx(i)
+    const draft = drafts.find(d => d.id === id)
+    if (!draft) return
+    setRefiningId(id)
     try {
       const res = await fetch('/api/generate/threads/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caption: drafts[i].caption, instruction }),
+        body: JSON.stringify({ caption: draft.caption, instruction }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
-      updateDraft(i, data.caption)
-      setRefineInstructions(prev => ({ ...prev, [i]: '' }))
+      updateDraft(id, data.caption)
+      setRefineInstructions(prev => ({ ...prev, [id]: '' }))
     } catch {
       alert('수정 중 오류가 발생했습니다.')
     } finally {
-      setRefiningIdx(null)
+      setRefiningId(null)
     }
   }
 
-  function selectPendingTone(idx: number, tone: ContentTone) {
-    setPendingTones(prev => ({ ...prev, [idx]: prev[idx] === tone ? null : tone }))
+  function selectPendingTone(id: string, tone: ContentTone) {
+    setPendingTones(prev => ({ ...prev, [id]: prev[id] === tone ? null : tone }))
   }
 
-  async function generateWithTone(idx: number) {
-    const newTone = pendingTones[idx]
+  async function generateWithTone(id: string) {
+    const newTone = pendingTones[id]
     if (!newTone) return
-    setRegeneratingIdx(idx)
+    const draft = drafts.find(d => d.id === id)
+    if (!draft) return
+    setRegeneratingId(id)
     try {
       const toneLabel = TONES.find(t => t.value === newTone)?.label ?? newTone
       const res = await fetch('/api/generate/threads/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          caption: drafts[idx].caption,
+          caption: draft.caption,
           instruction: `이 글의 내용과 소재는 그대로 유지하면서 '${toneLabel}' 말투로만 바꿔줘. 구조와 스토리는 변경하지 마.`,
         }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
-      setDrafts(prev => prev.map((d, i) => i === idx ? { ...d, caption: data.caption, tone: newTone } : d))
-      setPendingTones(prev => ({ ...prev, [idx]: null }))
+      setDrafts(prev => prev.map(d => d.id === id ? { ...d, caption: data.caption, tone: newTone } : d))
+      fetch('/api/generate/threads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, caption: data.caption, tone: newTone }),
+      }).catch(() => {})
+      setPendingTones(prev => ({ ...prev, [id]: null }))
     } catch {
       alert('톤 변경 중 오류가 발생했습니다.')
     } finally {
-      setRegeneratingIdx(null)
+      setRegeneratingId(null)
+    }
+  }
+
+  async function generate() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/generate/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context_note: contextNote, mode, count: 8 }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(data.error); return }
+      const newDrafts: DraftWithId[] = data.drafts
+      setDrafts(prev => [...newDrafts, ...prev])
+      const newKey = newDrafts[0]?.created_at
+      if (newKey) setOpenGroups(prev => new Set([newKey, ...prev]))
+      setSelectedId(newDrafts[0]?.id ?? null)
+    } catch {
+      alert('생성 중 오류가 발생했습니다.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -135,31 +201,9 @@ export default function ThreadsCreatePage() {
     setPublishPreviews(prev => prev.filter((_, idx) => idx !== i))
   }
 
-  async function generate() {
-    setLoading(true)
-    setDrafts([])
-    setSelected(null)
-    setRefineInstructions({})
-    try {
-      const res = await fetch('/api/generate/threads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ context_note: contextNote, mode, count: 8 }),
-      })
-      const data = await res.json()
-      if (data.error) { alert(data.error); return }
-      setDrafts(data.drafts)
-      setSelected(0)
-    } catch {
-      alert('생성 중 오류가 발생했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function publish(immediate: boolean) {
-    if (selected === null || !drafts[selected]) return
-    const draft = drafts[selected]
+    const draft = drafts.find(d => d.id === selectedId)
+    if (!draft) return
     setPublishing(true)
     try {
       if (publishImages.length > 0 && draft.id) {
@@ -198,6 +242,18 @@ export default function ThreadsCreatePage() {
     showToast('복사되었습니다')
   }
 
+  function toggleGroup(key: string) {
+    setOpenGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  const selectedDraft = drafts.find(d => d.id === selectedId) ?? null
+  const groups = groupBySession(drafts)
+
   return (
     <div className="space-y-5">
       {/* 헤더 */}
@@ -206,12 +262,10 @@ export default function ThreadsCreatePage() {
           <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
           <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
         </div>
-
         <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
           <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
           <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
         </div>
-
         <div className="ml-auto flex flex-col items-center gap-1.5 flex-shrink-0">
           <span className="text-xs text-gray-400 font-medium">학습범위</span>
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
@@ -252,107 +306,128 @@ export default function ThreadsCreatePage() {
             </button>
           </div>
 
-          {/* 초안 2×4 그리드 */}
-          {drafts.length > 0 && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                {drafts.map((draft, idx) => (
-                  <DraftCard
-                    key={idx}
-                    draft={draft}
-                    idx={idx}
-                    selected={selected === idx}
-                    onSelect={() => setSelected(idx)}
-                    onCopy={() => copyText(draft)}
-                    onUpdate={cap => updateDraft(idx, cap)}
-                    refineInstruction={refineInstructions[idx] || ''}
-                    onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [idx]: v }))}
-                    onRefine={() => refine(idx)}
-                    refining={refiningIdx === idx}
-                    pendingTone={pendingTones[idx] ?? null}
-                    onToneSelect={t => selectPendingTone(idx, t)}
-                    onToneGenerate={() => generateWithTone(idx)}
-                    regenerating={regeneratingIdx === idx}
-                  />
-                ))}
+          {/* 세션별 아코디언 */}
+          {groups.map(group => {
+            const isOpen = openGroups.has(group.key)
+            return (
+              <div key={group.key} className="space-y-2">
+                {/* 세션 헤더 */}
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {isOpen
+                      ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                      : <ChevronRight className="w-4 h-4 text-gray-400" />
+                    }
+                    <span className="text-sm font-semibold text-gray-800">{group.label}</span>
+                    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{group.drafts.length}개</span>
+                  </div>
+                  <span className="text-xs text-gray-300">클릭해서 {isOpen ? '접기' : '펼치기'}</span>
+                </button>
+
+                {/* 카드 그리드 */}
+                {isOpen && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {group.drafts.map((draft, displayIdx) => (
+                      <DraftCard
+                        key={draft.id}
+                        draft={draft}
+                        displayIdx={displayIdx + 1}
+                        selected={selectedId === draft.id}
+                        onSelect={() => setSelectedId(draft.id ?? null)}
+                        onCopy={() => copyText(draft)}
+                        onUpdate={cap => draft.id && updateDraft(draft.id, cap)}
+                        refineInstruction={draft.id ? (refineInstructions[draft.id] || '') : ''}
+                        onRefineChange={v => draft.id && setRefineInstructions(prev => ({ ...prev, [draft.id!]: v }))}
+                        onRefine={() => draft.id && refine(draft.id)}
+                        refining={refiningId === draft.id}
+                        pendingTone={draft.id ? (pendingTones[draft.id] ?? null) : null}
+                        onToneSelect={t => draft.id && selectPendingTone(draft.id, t)}
+                        onToneGenerate={() => draft.id && generateWithTone(draft.id)}
+                        regenerating={regeneratingId === draft.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* 미리보기 + 발행 */}
+          {selectedDraft && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+                <p className="text-xs font-medium text-gray-400 mb-3">Threads 미리보기</p>
+                <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gray-200" />
+                    <div>
+                      <p className="text-xs font-semibold">내 계정</p>
+                      <p className="text-xs text-gray-400">방금 전</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{selectedDraft.caption}</p>
+                  {publishPreviews.length > 0 && (
+                    <div className="flex gap-1.5 mt-2 flex-wrap">
+                      {publishPreviews.map((p, i) => (
+                        <img key={i} src={p} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-sm text-indigo-500 mt-2">{hashtagsToString(selectedDraft.hashtags)}</p>
+                </div>
               </div>
 
-              {/* 미리보기 + 사진첨부 + 발행 */}
-              {selected !== null && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-                    <p className="text-xs font-medium text-gray-400 mb-3">Threads 미리보기 — 초안 {selected + 1}</p>
-                    <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-8 h-8 rounded-full bg-gray-200" />
-                        <div>
-                          <p className="text-xs font-semibold">내 계정</p>
-                          <p className="text-xs text-gray-400">방금 전</p>
-                        </div>
-                      </div>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{drafts[selected].caption}</p>
-                      {publishPreviews.length > 0 && (
-                        <div className="flex gap-1.5 mt-2 flex-wrap">
-                          {publishPreviews.map((p, i) => (
-                            <img key={i} src={p} alt="" className="w-16 h-16 object-cover rounded-lg" />
-                          ))}
-                        </div>
-                      )}
-                      <p className="text-sm text-indigo-500 mt-2">{hashtagsToString(drafts[selected].hashtags)}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
-                          <Image className="w-3.5 h-3.5" /> 사진 첨부 (최대 4장)
-                        </p>
-                        {publishImages.length < 4 && (
-                          <button onClick={() => publishImageRef.current?.click()} className="text-xs text-indigo-500 hover:text-indigo-600">+ 추가</button>
-                        )}
-                      </div>
-                      {publishPreviews.length > 0 ? (
-                        <div className="flex gap-2 flex-wrap mb-1">
-                          {publishPreviews.map((p, i) => (
-                            <div key={i} className="relative w-14 h-14">
-                              <img src={p} alt="" className="w-full h-full object-cover rounded-lg" />
-                              <button onClick={() => removePublishImage(i)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center">
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <button onClick={() => publishImageRef.current?.click()} className="w-full border border-dashed border-gray-200 rounded-xl py-2.5 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-400 transition-colors">
-                          + 사진 추가 · Meta 연결 후 함께 발행
-                        </button>
-                      )}
-                      <input ref={publishImageRef} type="file" multiple accept="image/*" className="hidden" onChange={e => handlePublishImages(e.target.files)} />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <button onClick={() => publish(true)} disabled={publishing} className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60">
-                        <Send className="w-4 h-4" /> 즉시 발행
-                      </button>
-                      <button onClick={() => setScheduleMode(!scheduleMode)} className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
-                        <Clock className="w-4 h-4" /> 예약 발행
-                      </button>
-                    </div>
-                    {scheduleMode && (
-                      <div className="flex gap-2">
-                        <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
-                        <button onClick={() => publish(false)} disabled={!scheduledAt || publishing} className="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-60">예약</button>
-                      </div>
+              <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
+                      <Image className="w-3.5 h-3.5" /> 사진 첨부 (최대 4장)
+                    </p>
+                    {publishImages.length < 4 && (
+                      <button onClick={() => publishImageRef.current?.click()} className="text-xs text-indigo-500 hover:text-indigo-600">+ 추가</button>
                     )}
-
-                    <button onClick={generate} disabled={loading} className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 disabled:opacity-60">
-                      <RefreshCw className="w-3.5 h-3.5" /> 다시 생성
-                    </button>
                   </div>
+                  {publishPreviews.length > 0 ? (
+                    <div className="flex gap-2 flex-wrap mb-1">
+                      {publishPreviews.map((p, i) => (
+                        <div key={i} className="relative w-14 h-14">
+                          <img src={p} alt="" className="w-full h-full object-cover rounded-lg" />
+                          <button onClick={() => removePublishImage(i)} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center">
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <button onClick={() => publishImageRef.current?.click()} className="w-full border border-dashed border-gray-200 rounded-xl py-2.5 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-400 transition-colors">
+                      + 사진 추가 · Meta 연결 후 함께 발행
+                    </button>
+                  )}
+                  <input ref={publishImageRef} type="file" multiple accept="image/*" className="hidden" onChange={e => handlePublishImages(e.target.files)} />
                 </div>
-              )}
-            </>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => publish(true)} disabled={publishing} className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60">
+                    <Send className="w-4 h-4" /> 즉시 발행
+                  </button>
+                  <button onClick={() => setScheduleMode(!scheduleMode)} className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-medium hover:bg-gray-50">
+                    <Clock className="w-4 h-4" /> 예약 발행
+                  </button>
+                </div>
+                {scheduleMode && (
+                  <div className="flex gap-2">
+                    <input type="datetime-local" value={scheduledAt} onChange={e => setScheduledAt(e.target.value)} className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+                    <button onClick={() => publish(false)} disabled={!scheduledAt || publishing} className="px-4 py-2 rounded-xl bg-green-500 text-white text-sm font-medium hover:bg-green-600 disabled:opacity-60">예약</button>
+                  </div>
+                )}
+                <button onClick={generate} disabled={loading} className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 disabled:opacity-60">
+                  <RefreshCw className="w-3.5 h-3.5" /> 다시 생성
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -362,7 +437,7 @@ export default function ThreadsCreatePage() {
 
 interface DraftCardProps {
   draft: DraftWithId
-  idx: number
+  displayIdx: number
   selected: boolean
   onSelect: () => void
   onCopy: () => void
@@ -377,7 +452,7 @@ interface DraftCardProps {
   regenerating: boolean
 }
 
-function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating }: DraftCardProps) {
+function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating }: DraftCardProps) {
   const hasPendingChange = pendingTone !== null && pendingTone !== draft.tone
 
   return (
@@ -395,14 +470,11 @@ function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineIns
 
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-medium text-gray-400">초안 {idx + 1}</span>
+          <span className="text-xs font-medium text-gray-400">#{displayIdx}</span>
           {draft.tone && (
             <span className="text-xs px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
               {TONES.find(t => t.value === draft.tone)?.emoji} {TONES.find(t => t.value === draft.tone)?.label ?? draft.tone}
             </span>
-          )}
-          {draft.created_at && (
-            <span className="text-xs text-gray-300">{relativeDate(draft.created_at)}</span>
           )}
         </div>
         <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
@@ -426,7 +498,7 @@ function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineIns
         <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2 leading-relaxed">{draft.engagement_hook}</p>
       )}
 
-      {/* 톤 선택 + 생성 버튼 */}
+      {/* 톤 선택 + 변환 버튼 */}
       <div className="mt-2 pt-2 border-t border-gray-100" onClick={e => e.stopPropagation()}>
         <div className="flex flex-wrap gap-1 mb-2">
           {TONES.map(t => {
