@@ -72,6 +72,10 @@ ${hasThreadsStyle ? threadsExamples : ''}
 ${competitorHashtags?.length ? `- 동종업계 해시태그 참고: ${competitorHashtags.slice(0, 5).join(', ')}` : ''}
 ${contentTips?.length ? `- 콘텐츠 전략: ${contentTips[0]}` : ''}
 
+[분위기 비율 — 반드시 지켜야 함]
+- 전체 ${total}개 중 약 70%: 긍정적·밝은 분위기 (감사, 뿌듯함, 소소한 행복, 단골 이야기, 기대감)
+- 전체 ${total}개 중 약 30%: 현실적·솔직한 분위기 (자영업 고충, 원가 현실, 배달앱 고민, 손님 에피소드)
+
 [지시사항]
 ${instruction}
 - 최근 발행 글과 소재 중복 금지

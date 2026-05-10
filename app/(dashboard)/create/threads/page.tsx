@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2 } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
@@ -14,7 +14,18 @@ const TONES: { value: ContentTone; label: string; emoji: string }[] = [
   { value: '고객소통형', label: '고객소통형', emoji: '💬' },
 ]
 
-interface DraftWithId extends ThreadsDraft { id?: string }
+interface DraftWithId extends ThreadsDraft { id?: string; created_at?: string }
+
+function relativeDate(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const min = Math.floor(diff / 60000)
+  if (min < 2) return '방금 전'
+  if (min < 60) return `${min}분 전`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}시간 전`
+  const day = Math.floor(hr / 24)
+  return `${day}일 전`
+}
 
 export default function ThreadsCreatePage() {
   const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
@@ -34,6 +45,25 @@ export default function ThreadsCreatePage() {
   const [publishImages, setPublishImages] = useState<File[]>([])
   const [publishPreviews, setPublishPreviews] = useState<string[]>([])
   const publishImageRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch('/api/generate/threads')
+      .then(r => r.json())
+      .then(data => {
+        if (data.drafts?.length) {
+          setDrafts(data.drafts.map((d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
+            tone: d.tone ?? undefined,
+            caption: d.caption ?? '',
+            hashtags: d.hashtags ?? [],
+            engagement_hook: '',
+            id: d.id,
+            created_at: d.created_at,
+          })))
+          setSelected(0)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   function updateDraft(i: number, caption: string) {
     setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
@@ -364,12 +394,15 @@ function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineIns
       )}
 
       <div className="flex justify-between items-center mb-2">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-medium text-gray-400">초안 {idx + 1}</span>
           {draft.tone && (
             <span className="text-xs px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
               {TONES.find(t => t.value === draft.tone)?.emoji} {TONES.find(t => t.value === draft.tone)?.label ?? draft.tone}
             </span>
+          )}
+          {draft.created_at && (
+            <span className="text-xs text-gray-300">{relativeDate(draft.created_at)}</span>
           )}
         </div>
         <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">

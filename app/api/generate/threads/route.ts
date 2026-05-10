@@ -117,5 +117,24 @@ export async function POST(req: NextRequest) {
   }))
   const { data: saved } = await supabase.from('contents').insert(insertData).select()
 
-  return NextResponse.json({ drafts: drafts.map((d, i) => ({ ...d, id: saved?.[i]?.id })) })
+  return NextResponse.json({ drafts: drafts.map((d, i) => ({ ...d, id: saved?.[i]?.id, created_at: saved?.[i]?.created_at })) })
+}
+
+export async function GET() {
+  const supabase = await createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+  const { data } = await supabase
+    .from('contents')
+    .select('id, tone, caption, hashtags, created_at, status')
+    .eq('user_id', user.id)
+    .eq('content_type', 'threads_text')
+    .in('status', ['draft', 'confirmed'])
+    .gte('created_at', threeDaysAgo)
+    .order('created_at', { ascending: false })
+    .limit(24)
+
+  return NextResponse.json({ drafts: data ?? [] })
 }
