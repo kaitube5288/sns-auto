@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { tones, tone, context_note, mode = 'solo' } = await req.json()
+  const { tones, tone, context_note, mode = 'solo', count } = await req.json()
   const selectedTones: ContentTone[] = tones ?? (tone ? [tone] : ['스레드감성형'])
 
   // 비즈니스 프로필 조회
@@ -86,7 +86,8 @@ export async function POST(req: NextRequest) {
     profile.competitor_hashtags ?? [],
     profile.analysis_result?.content_tips ?? [],
     learnedExamples ?? [],
-    trendSummary || undefined
+    trendSummary || undefined,
+    count
   )
 
   let text: string

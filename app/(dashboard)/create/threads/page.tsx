@@ -19,7 +19,6 @@ interface DraftWithId extends ThreadsDraft { id?: string }
 export default function ThreadsCreatePage() {
   const [activeTab, setActiveTab] = useState<'generate' | 'learn'>('generate')
   const [mode, setMode] = useState<'solo' | 'combined'>('solo')
-  const [selectedTones, setSelectedTones] = useState<ContentTone[]>(['스레드감성형'])
   const [contextNote, setContextNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [drafts, setDrafts] = useState<DraftWithId[]>([])
@@ -30,29 +29,10 @@ export default function ThreadsCreatePage() {
   const [toast, setToast] = useState('')
   const [refineInstructions, setRefineInstructions] = useState<Record<number, string>>({})
   const [refiningIdx, setRefiningIdx] = useState<number | null>(null)
+  const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null)
   const [publishImages, setPublishImages] = useState<File[]>([])
   const [publishPreviews, setPublishPreviews] = useState<string[]>([])
   const publishImageRef = useRef<HTMLInputElement>(null)
-
-  function toggleTone(t: ContentTone) {
-    setSelectedTones(prev => {
-      if (prev.includes(t)) {
-        // 마지막 하나는 해제 불가
-        if (prev.length === 1) return prev
-        return prev.filter(x => x !== t)
-      }
-      if (prev.length >= 2) {
-        // 2개 이미 선택됐으면 첫 번째 교체
-        return [prev[1], t]
-      }
-      return [...prev, t]
-    })
-  }
-
-  function toneOrder(t: ContentTone): number | null {
-    const idx = selectedTones.indexOf(t)
-    return idx === -1 ? null : idx + 1
-  }
 
   function updateDraft(i: number, caption: string) {
     setDrafts(prev => prev.map((d, idx) => idx === i ? { ...d, caption } : d))
@@ -76,6 +56,27 @@ export default function ThreadsCreatePage() {
       alert('수정 중 오류가 발생했습니다.')
     } finally {
       setRefiningIdx(null)
+    }
+  }
+
+  async function changeTone(idx: number, newTone: ContentTone) {
+    if (regeneratingIdx !== null) return
+    setRegeneratingIdx(idx)
+    try {
+      const res = await fetch('/api/generate/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tones: [newTone], context_note: contextNote, mode, count: 1 }),
+      })
+      const data = await res.json()
+      if (data.error) { alert(data.error); return }
+      if (data.drafts?.[0]) {
+        setDrafts(prev => prev.map((d, i) => i === idx ? { ...data.drafts[0] } : d))
+      }
+    } catch {
+      alert('톤 변경 중 오류가 발생했습니다.')
+    } finally {
+      setRegeneratingIdx(null)
     }
   }
 
@@ -104,7 +105,7 @@ export default function ThreadsCreatePage() {
       const res = await fetch('/api/generate/threads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tones: selectedTones, context_note: contextNote, mode }),
+        body: JSON.stringify({ context_note: contextNote, mode, count: 8 }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
@@ -158,30 +159,20 @@ export default function ThreadsCreatePage() {
     showToast('복사되었습니다')
   }
 
-  // 2x3 그리드: 왼쪽 col = drafts[0..2], 오른쪽 col = drafts[3..5]
-  const leftDrafts = drafts.slice(0, 3)
-  const rightDrafts = drafts.slice(3, 6)
-  const tone1Label = TONES.find(t => t.value === selectedTones[0])?.label ?? selectedTones[0]
-  const tone2Label = selectedTones[1] ? TONES.find(t => t.value === selectedTones[1])?.label ?? selectedTones[1] : tone1Label
-  const isTwoTones = selectedTones.length === 2
-
   return (
     <div className="space-y-5">
-      {/* 헤더: 탭(왼쪽) + 제목(중앙) + 학습범위(오른쪽) */}
+      {/* 헤더 */}
       <div className="relative flex items-center">
-        {/* 왼쪽: 탭 */}
         <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
           <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
           <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
         </div>
 
-        {/* 중앙: 제목 */}
         <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
           <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
           <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
         </div>
 
-        {/* 오른쪽: 학습범위 */}
         <div className="ml-auto flex flex-col items-center gap-1.5 flex-shrink-0">
           <span className="text-xs text-gray-400 font-medium">학습범위</span>
           <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
@@ -201,37 +192,6 @@ export default function ThreadsCreatePage() {
 
       {activeTab === 'generate' && (
         <div className="space-y-4">
-          {/* 톤 선택 — 최대 2개 */}
-          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-900 text-sm">톤 선택</h2>
-              <span className="text-xs text-gray-400">최대 2개 선택 · {isTwoTones ? '각 3개씩' : '6개'} 생성</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {TONES.map(t => {
-                const order = toneOrder(t.value)
-                const isSelected = order !== null
-                return (
-                  <button
-                    key={t.value}
-                    onClick={() => toggleTone(t.value)}
-                    className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left transition-colors ${
-                      isSelected ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-100 bg-gray-50 text-gray-700 hover:border-gray-200'
-                    }`}
-                  >
-                    {isSelected && (
-                      <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                        {order}
-                      </span>
-                    )}
-                    <span className="text-lg">{t.emoji}</span>
-                    <span className="text-sm font-medium">{t.label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
           {/* 특이사항 + 생성 버튼 */}
           <div className="flex gap-3">
             <input
@@ -248,73 +208,37 @@ export default function ThreadsCreatePage() {
             >
               {loading
                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> 생성 중...</>
-                : <><Sparkles className="w-4 h-4" /> 글 생성 ({isTwoTones ? '3+3' : '6'}개)</>
+                : <><Sparkles className="w-4 h-4" /> 글 생성 (8개)</>
               }
             </button>
           </div>
 
-          {/* 초안 2x3 그리드 */}
+          {/* 초안 2×4 그리드 */}
           {drafts.length > 0 && (
             <>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-                {/* 컬럼 헤더 */}
-                <div className="flex items-center gap-1.5 pb-1 border-b border-indigo-100">
-                  <span className="w-5 h-5 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center">1</span>
-                  <span className="text-xs font-semibold text-indigo-700">{tone1Label}</span>
-                </div>
-                <div className="flex items-center gap-1.5 pb-1 border-b border-gray-200">
-                  <span className="w-5 h-5 rounded-full bg-gray-400 text-white text-[10px] font-bold flex items-center justify-center">2</span>
-                  <span className="text-xs font-semibold text-gray-600">{tone2Label}</span>
-                </div>
-
-                {/* 왼쪽: 초안 1~3, 오른쪽: 초안 4~6 */}
-                {[0, 1, 2].map(row => {
-                  const leftIdx = row
-                  const rightIdx = row + 3
-                  return (
-                    <>
-                      {/* 왼쪽 카드 */}
-                      {leftDrafts[row] ? (
-                        <DraftCard
-                          key={`l${leftIdx}`}
-                          draft={leftDrafts[row]}
-                          idx={leftIdx}
-                          selected={selected === leftIdx}
-                          onSelect={() => setSelected(leftIdx)}
-                          onCopy={() => copyText(leftDrafts[row])}
-                          onUpdate={cap => updateDraft(leftIdx, cap)}
-                          refineInstruction={refineInstructions[leftIdx] || ''}
-                          onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [leftIdx]: v }))}
-                          onRefine={() => refine(leftIdx)}
-                          refining={refiningIdx === leftIdx}
-                        />
-                      ) : <div key={`l${leftIdx}`} />}
-
-                      {/* 오른쪽 카드 */}
-                      {rightDrafts[row] ? (
-                        <DraftCard
-                          key={`r${rightIdx}`}
-                          draft={rightDrafts[row]}
-                          idx={rightIdx}
-                          selected={selected === rightIdx}
-                          onSelect={() => setSelected(rightIdx)}
-                          onCopy={() => copyText(rightDrafts[row])}
-                          onUpdate={cap => updateDraft(rightIdx, cap)}
-                          refineInstruction={refineInstructions[rightIdx] || ''}
-                          onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [rightIdx]: v }))}
-                          onRefine={() => refine(rightIdx)}
-                          refining={refiningIdx === rightIdx}
-                        />
-                      ) : <div key={`r${rightIdx}`} />}
-                    </>
-                  )
-                })}
+              <div className="grid grid-cols-2 gap-4">
+                {drafts.map((draft, idx) => (
+                  <DraftCard
+                    key={idx}
+                    draft={draft}
+                    idx={idx}
+                    selected={selected === idx}
+                    onSelect={() => setSelected(idx)}
+                    onCopy={() => copyText(draft)}
+                    onUpdate={cap => updateDraft(idx, cap)}
+                    refineInstruction={refineInstructions[idx] || ''}
+                    onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [idx]: v }))}
+                    onRefine={() => refine(idx)}
+                    refining={refiningIdx === idx}
+                    onChangeTone={t => changeTone(idx, t)}
+                    regenerating={regeneratingIdx === idx}
+                  />
+                ))}
               </div>
 
               {/* 미리보기 + 사진첨부 + 발행 */}
               {selected !== null && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* 미리보기 */}
                   <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs font-medium text-gray-400 mb-3">Threads 미리보기 — 초안 {selected + 1}</p>
                     <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/50">
@@ -337,9 +261,7 @@ export default function ThreadsCreatePage() {
                     </div>
                   </div>
 
-                  {/* 사진첨부 + 발행 */}
                   <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm space-y-3">
-                    {/* 사진 첨부 */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <p className="text-xs font-medium text-gray-600 flex items-center gap-1">
@@ -368,7 +290,6 @@ export default function ThreadsCreatePage() {
                       <input ref={publishImageRef} type="file" multiple accept="image/*" className="hidden" onChange={e => handlePublishImages(e.target.files)} />
                     </div>
 
-                    {/* 발행 버튼 */}
                     <div className="grid grid-cols-2 gap-2">
                       <button onClick={() => publish(true)} disabled={publishing} className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60">
                         <Send className="w-4 h-4" /> 즉시 발행
@@ -409,22 +330,38 @@ interface DraftCardProps {
   onRefineChange: (v: string) => void
   onRefine: () => void
   refining: boolean
+  onChangeTone: (t: ContentTone) => void
+  regenerating: boolean
 }
 
-function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining }: DraftCardProps) {
+function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, onChangeTone, regenerating }: DraftCardProps) {
   return (
     <div
       onClick={onSelect}
-      className={`bg-white rounded-2xl border p-4 transition-all shadow-sm cursor-pointer ${
+      className={`relative bg-white rounded-2xl border p-4 transition-all shadow-sm cursor-pointer ${
         selected ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-100 hover:border-gray-200'
       }`}
     >
+      {regenerating && (
+        <div className="absolute inset-0 bg-white/80 rounded-2xl flex items-center justify-center z-10">
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
       <div className="flex justify-between items-center mb-2">
-        <span className="text-xs font-medium text-gray-400">초안 {idx + 1} <span className="text-indigo-400">· 수정 가능</span></span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-gray-400">초안 {idx + 1}</span>
+          {draft.tone && (
+            <span className="text-xs px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 font-medium">
+              {TONES.find(t => t.value === draft.tone)?.emoji} {TONES.find(t => t.value === draft.tone)?.label ?? draft.tone}
+            </span>
+          )}
+        </div>
         <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
           <Copy className="w-3.5 h-3.5" />
         </button>
       </div>
+
       <textarea
         value={draft.caption}
         onChange={e => { e.stopPropagation(); onUpdate(e.target.value) }}
@@ -440,8 +377,27 @@ function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineIns
       {draft.engagement_hook && (
         <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2 leading-relaxed">{draft.engagement_hook}</p>
       )}
+
+      {/* 톤 변경 칩 */}
+      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+        {TONES.map(t => (
+          <button
+            key={t.value}
+            onClick={() => onChangeTone(t.value)}
+            disabled={regenerating || refining}
+            className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors disabled:opacity-40 ${
+              draft.tone === t.value
+                ? 'bg-indigo-100 text-indigo-700'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {t.emoji} {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* AI 수정 */}
-      <div className="mt-3 pt-2.5 border-t border-gray-100 flex gap-1.5" onClick={e => e.stopPropagation()}>
+      <div className="mt-2 pt-2 border-t border-gray-100 flex gap-1.5" onClick={e => e.stopPropagation()}>
         <input
           value={refineInstruction}
           onChange={e => onRefineChange(e.target.value)}

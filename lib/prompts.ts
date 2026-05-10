@@ -20,10 +20,11 @@ export function buildThreadsPrompt(
   competitorHashtags?: string[],
   contentTips?: string[],
   learnedExamples?: LearnedEx[],
-  trendSummary?: string
+  trendSummary?: string,
+  count?: number
 ): string {
-  const perTone = tones.length === 1 ? 6 : 3
-  const total = tones.length * perTone
+  const perTone = count ?? (tones.length === 1 ? 6 : 3)
+  const total = count ?? (tones.length * perTone)
 
   const recentStr = recentCaptions.length
     ? `\n[최근 발행 글 - 반드시 다른 소재로]\n${recentCaptions.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
@@ -53,7 +54,7 @@ export function buildThreadsPrompt(
     return `톤${tones.length > 1 ? i + 1 : ''}: ${t} — ${TONE_GUIDE[t]}\n  규칙: ${rules}`
   }).join('\n')
 
-  const instruction = tones.length === 1
+  const instruction = (count !== undefined || tones.length === 1)
     ? `${tones[0]} 톤으로 총 ${total}개 작성 (서로 다른 포맷/소재)`
     : `톤1(${tones[0]})으로 ${perTone}개 + 톤2(${tones[1]})으로 ${perTone}개 = 총 ${total}개\n- tone 필드에 정확한 톤명 기재 필수\n- 톤1 ${perTone}개를 먼저, 그 다음 톤2 ${perTone}개 순서로`
 
