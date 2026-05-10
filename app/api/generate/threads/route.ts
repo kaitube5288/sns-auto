@@ -136,6 +136,18 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
+export async function DELETE(req: NextRequest) {
+  const supabase = await createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: '잘못된 요청' }, { status: 400 })
+
+  await supabase.from('contents').delete().eq('id', id).eq('user_id', user.id)
+  return NextResponse.json({ ok: true })
+}
+
 export async function GET() {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()

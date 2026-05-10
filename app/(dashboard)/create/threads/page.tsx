@@ -244,6 +244,16 @@ export default function ThreadsCreatePage() {
     setTimeout(() => setToast(''), 3000)
   }
 
+  async function deleteDraft(id: string) {
+    setDrafts(prev => prev.filter(d => d.id !== id))
+    if (selectedId === id) setSelectedId(null)
+    fetch('/api/generate/threads', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => {})
+  }
+
   function copyText(draft: DraftWithId) {
     navigator.clipboard.writeText(`${draft.caption}\n\n${hashtagsToString(draft.hashtags)}`)
     showToast('복사되었습니다')
@@ -354,6 +364,7 @@ export default function ThreadsCreatePage() {
                         onToneSelect={t => draft.id && selectPendingTone(draft.id, t)}
                         onToneGenerate={() => draft.id && generateWithTone(draft.id)}
                         regenerating={regeneratingId === draft.id}
+                        onDelete={() => draft.id && deleteDraft(draft.id)}
                       />
                     ))}
                   </div>
@@ -457,9 +468,10 @@ interface DraftCardProps {
   onToneSelect: (t: ContentTone) => void
   onToneGenerate: () => void
   regenerating: boolean
+  onDelete: () => void
 }
 
-function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating }: DraftCardProps) {
+function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating, onDelete }: DraftCardProps) {
   const hasPendingChange = pendingTone !== null && pendingTone !== draft.tone
   const [showEmoji, setShowEmoji] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -512,6 +524,13 @@ function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, re
           </button>
           <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={e => { e.stopPropagation(); onDelete() }}
+            className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
+            title="삭제"
+          >
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
