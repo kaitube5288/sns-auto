@@ -39,7 +39,10 @@ export async function GET(req: NextRequest) {
       }),
     })
     const tokenData = await tokenRes.json()
-    if (tokenData.error) throw new Error(tokenData.error.message ?? 'Token exchange failed')
+    if (tokenData.error) {
+      console.error('[Threads OAuth] short token error:', JSON.stringify(tokenData))
+      throw new Error(tokenData.error?.message ?? JSON.stringify(tokenData.error))
+    }
     const shortToken = tokenData.access_token
 
     // 2. 60일 장기 토큰 교환
@@ -47,7 +50,10 @@ export async function GET(req: NextRequest) {
       `${THREADS_LONG_TOKEN_URL}?grant_type=th_exchange_token&client_id=${process.env.THREADS_APP_ID}&client_secret=${process.env.THREADS_APP_SECRET}&access_token=${shortToken}`
     )
     const longTokenData = await longTokenRes.json()
-    if (longTokenData.error) throw new Error(longTokenData.error.message ?? 'Long token exchange failed')
+    if (longTokenData.error) {
+      console.error('[Threads OAuth] long token error:', JSON.stringify(longTokenData))
+      throw new Error(longTokenData.error?.message ?? JSON.stringify(longTokenData.error))
+    }
     const longToken = longTokenData.access_token
     const expiresAt = new Date(Date.now() + longTokenData.expires_in * 1000).toISOString()
 
@@ -70,7 +76,8 @@ export async function GET(req: NextRequest) {
     response.cookies.delete('meta_oauth_state')
     return response
   } catch (err) {
-    console.error('Threads OAuth callback error:', err)
-    return NextResponse.redirect(`${APP_URL}/connect?error=token_exchange_failed`)
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('Threads OAuth callback error:', msg)
+    return NextResponse.redirect(`${APP_URL}/connect?error=${encodeURIComponent(msg)}`)
   }
 }
