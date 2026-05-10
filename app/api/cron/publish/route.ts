@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminSupabase } from '@/lib/supabase'
-import { createThreadsContainer, publishThreads, checkThreadsStatus, createIGImageContainer, createIGCarouselContainer, publishIGMedia } from '@/lib/meta-api'
+import { createThreadsContainer, createThreadsCarouselItem, createThreadsCarouselContainer, publishThreads, checkThreadsStatus, createIGImageContainer, createIGCarouselContainer, publishIGMedia } from '@/lib/meta-api'
 import { decryptToken, hashtagsToString } from '@/lib/utils'
 
 export const maxDuration = 60
@@ -44,17 +44,33 @@ export async function GET(req: NextRequest) {
         const text = item.hashtags?.length
           ? `${item.caption}\n\n${hashtagsToString(item.hashtags)}`
           : item.caption
+        const mediaUrls: string[] = item.media_urls ?? []
 
-        const container = await createThreadsContainer(account.threads_user_id, token, text)
+        let containerId: string
+        if (mediaUrls.length === 0) {
+          const c = await createThreadsContainer(account.threads_user_id, token, text)
+          containerId = c.id
+        } else if (mediaUrls.length === 1) {
+          const c = await createThreadsContainer(account.threads_user_id, token, text, mediaUrls[0])
+          containerId = c.id
+        } else {
+          const childIds: string[] = []
+          for (const url of mediaUrls) {
+            const c = await createThreadsCarouselItem(account.threads_user_id, token, url)
+            childIds.push(c.id)
+          }
+          const c = await createThreadsCarouselContainer(account.threads_user_id, token, childIds, text)
+          containerId = c.id
+        }
 
         // 준비 대기
         for (let i = 0; i < 10; i++) {
           await new Promise(r => setTimeout(r, 3000))
-          const status = await checkThreadsStatus(container.id, token)
+          const status = await checkThreadsStatus(containerId, token)
           if (status.status === 'FINISHED') break
         }
 
-        const published = await publishThreads(account.threads_user_id, token, container.id)
+        const published = await publishThreads(account.threads_user_id, token, containerId)
         await admin.from('contents').update({
           status: 'published',
           published_at: new Date().toISOString(),
