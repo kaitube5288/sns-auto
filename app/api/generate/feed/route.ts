@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
-import { generateWithImages, parseJSON } from '@/lib/gemini'
+import { generateWithImages, searchTrends, parseJSON } from '@/lib/gemini'
 import { buildFeedPrompt } from '@/lib/prompts'
 import type { ContentTone, FeedDraft } from '@/lib/types'
 
@@ -65,7 +65,35 @@ export async function POST(req: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const prompt = buildFeedPrompt(profile, tones, mediaCount, hasVideo, learnedExamples ?? [])
+  // 트렌드 검색 (1시간 캐시 — threads route와 캐시 공유)
+  const cacheKey = `trend_${profile.business_type}`
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  const { data: cachedTrend } = await supabase
+    .from('trend_cache')
+    .select('recent_posts, fetched_at')
+    .eq('user_id', user.id)
+    .eq('hashtag', cacheKey)
+    .gte('fetched_at', oneHourAgo)
+    .single()
+
+  let trendSummary = (cachedTrend?.recent_posts as { summary?: string } | null)?.summary ?? ''
+
+  if (!trendSummary) {
+    trendSummary = await searchTrends(
+      `오늘 날짜 기준 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
+    ).catch(() => '')
+
+    if (trendSummary) {
+      await supabase.from('trend_cache').upsert({
+        user_id: user.id,
+        hashtag: cacheKey,
+        recent_posts: { summary: trendSummary },
+        fetched_at: new Date().toISOString(),
+      }, { onConflict: 'user_id,hashtag' })
+    }
+  }
+
+  const prompt = buildFeedPrompt(profile, tones, mediaCount, hasVideo, learnedExamples ?? [], trendSummary || undefined)
 
   let text: string
   try {

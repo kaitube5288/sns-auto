@@ -91,12 +91,16 @@ export function buildFeedPrompt(
   tones: ContentTone[],
   mediaCount: number,
   hasVideo: boolean,
-  learnedExamples?: LearnedEx[]
+  learnedExamples?: LearnedEx[],
+  trendSummary?: string
 ): string {
   const tone1 = tones[0]
   const tone2 = tones[1] ?? tones[0]
   const learnedStr = learnedExamples?.length
     ? `\n[학습된 스타일 예시]\n${learnedExamples.filter(e => e.content_text).map((e, i) => `${i + 1}. ${e.content_text}`).join('\n')}\n`
+    : ''
+  const trendStr = trendSummary
+    ? `\n[오늘의 자영업 트렌드 - 캡션 소재로 활용]\n${trendSummary}\n`
     : ''
   const mediaDesc = hasVideo
     ? `사진 ${mediaCount - 1}장 + 동영상 1개 (슬라이드 인덱스 ${mediaCount - 1})`
@@ -110,7 +114,7 @@ export function buildFeedPrompt(
 미디어: ${mediaDesc}
 톤1 [${tone1}]: ${TONE_GUIDE[tone1]}
 톤2 [${tone2}]: ${TONE_GUIDE[tone2]}
-${learnedStr}
+${trendStr}${learnedStr}
 첨부된 사진·영상을 분석하여 인스타그램 피드용 콘텐츠 2개를 기획하세요.
 ${hasVideo ? `※ 첨부 이미지 마지막 여러 장은 동영상 프레임입니다. slide_order에서 동영상은 인덱스 ${mediaCount - 1} 하나로만 표현하세요.` : ''}
 
