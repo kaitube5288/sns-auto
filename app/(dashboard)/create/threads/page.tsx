@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Sparkles, RefreshCw, Copy, Send, Clock, CheckCircle2, Image, X, Wand2, ChevronDown, ChevronRight, Bookmark, BookmarkCheck } from 'lucide-react'
 import { hashtagsToString } from '@/lib/utils'
 import type { ContentTone, ThreadsDraft } from '@/lib/types'
 import LearnSection from '@/components/create/LearnSection'
@@ -61,6 +61,8 @@ export default function ThreadsCreatePage() {
   const [contextNote, setContextNote] = useState('')
   const [loading, setLoading] = useState(false)
   const [drafts, setDrafts] = useState<DraftWithId[]>([])
+  const [savedDrafts, setSavedDrafts] = useState<DraftWithId[]>([])
+  const [savedOpen, setSavedOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [openGroups, setOpenGroups] = useState<Set<string>>(new Set())
   const [publishing, setPublishing] = useState(false)
@@ -80,20 +82,25 @@ export default function ThreadsCreatePage() {
     fetch('/api/generate/threads')
       .then(r => r.json())
       .then(data => {
-        if (!data.drafts?.length) return
-        const loaded: DraftWithId[] = data.drafts.map((d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
+        const toItem = (d: { id: string; tone?: string; caption: string; hashtags: string[]; created_at: string }) => ({
           tone: d.tone ?? undefined,
           caption: d.caption ?? '',
           hashtags: d.hashtags ?? [],
           engagement_hook: '',
           id: d.id,
           created_at: d.created_at,
-        }))
-        setDrafts(loaded)
-        const groups = groupBySession(loaded)
-        if (groups[0]) {
-          setOpenGroups(new Set([groups[0].key]))
-          setSelectedId(loaded[0]?.id ?? null)
+        })
+        if (data.drafts?.length) {
+          const loaded = data.drafts.map(toItem)
+          setDrafts(loaded)
+          const groups = groupBySession(loaded)
+          if (groups[0]) {
+            setOpenGroups(new Set([groups[0].key]))
+            setSelectedId(loaded[0]?.id ?? null)
+          }
+        }
+        if (data.saved?.length) {
+          setSavedDrafts(data.saved.map(toItem))
         }
       })
       .catch(() => {})
@@ -101,6 +108,7 @@ export default function ThreadsCreatePage() {
 
   function updateDraft(id: string, caption: string) {
     setDrafts(prev => prev.map(d => d.id === id ? { ...d, caption } : d))
+    setSavedDrafts(prev => prev.map(d => d.id === id ? { ...d, caption } : d))
     clearTimeout(saveTimers.current[id])
     saveTimers.current[id] = setTimeout(() => {
       fetch('/api/generate/threads', {
@@ -244,8 +252,34 @@ export default function ThreadsCreatePage() {
     setTimeout(() => setToast(''), 3000)
   }
 
+  function saveDraft(id: string) {
+    const draft = drafts.find(d => d.id === id)
+    if (!draft) return
+    setDrafts(prev => prev.filter(d => d.id !== id))
+    setSavedDrafts(prev => [draft, ...prev])
+    if (selectedId === id) setSelectedId(null)
+    fetch('/api/generate/threads', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_bookmarked: true }),
+    }).catch(() => {})
+  }
+
+  function unsaveDraft(id: string) {
+    const draft = savedDrafts.find(d => d.id === id)
+    if (!draft) return
+    setSavedDrafts(prev => prev.filter(d => d.id !== id))
+    setDrafts(prev => [draft, ...prev])
+    fetch('/api/generate/threads', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_bookmarked: false }),
+    }).catch(() => {})
+  }
+
   async function deleteDraft(id: string) {
     setDrafts(prev => prev.filter(d => d.id !== id))
+    setSavedDrafts(prev => prev.filter(d => d.id !== id))
     if (selectedId === id) setSelectedId(null)
     fetch('/api/generate/threads', {
       method: 'DELETE',
@@ -365,6 +399,7 @@ export default function ThreadsCreatePage() {
                         onToneGenerate={() => draft.id && generateWithTone(draft.id)}
                         regenerating={regeneratingId === draft.id}
                         onDelete={() => draft.id && deleteDraft(draft.id)}
+                        onSave={() => draft.id && saveDraft(draft.id)}
                       />
                     ))}
                   </div>
@@ -372,6 +407,49 @@ export default function ThreadsCreatePage() {
               </div>
             )
           })}
+
+          {/* 저장된 글 섹션 */}
+          {savedDrafts.length > 0 && (
+            <div className="space-y-2">
+              <button
+                onClick={() => setSavedOpen(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 bg-amber-50 rounded-2xl border border-amber-100 hover:bg-amber-100 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  {savedOpen ? <ChevronDown className="w-4 h-4 text-amber-500" /> : <ChevronRight className="w-4 h-4 text-amber-500" />}
+                  <Bookmark className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm font-semibold text-amber-800">저장된 글</span>
+                  <span className="text-xs bg-amber-100 text-amber-600 px-2 py-0.5 rounded-full">{savedDrafts.length}개</span>
+                </div>
+                <span className="text-xs text-amber-400">클릭해서 {savedOpen ? '접기' : '펼치기'}</span>
+              </button>
+              {savedOpen && (
+                <div className="grid grid-cols-2 gap-4">
+                  {savedDrafts.map((draft, displayIdx) => (
+                    <DraftCard
+                      key={draft.id}
+                      draft={draft}
+                      displayIdx={displayIdx + 1}
+                      selected={selectedId === draft.id}
+                      onSelect={() => setSelectedId(draft.id ?? null)}
+                      onCopy={() => copyText(draft)}
+                      onUpdate={cap => draft.id && updateDraft(draft.id, cap)}
+                      refineInstruction={draft.id ? (refineInstructions[draft.id] || '') : ''}
+                      onRefineChange={v => draft.id && setRefineInstructions(prev => ({ ...prev, [draft.id!]: v }))}
+                      onRefine={() => draft.id && refine(draft.id)}
+                      refining={refiningId === draft.id}
+                      pendingTone={draft.id ? (pendingTones[draft.id] ?? null) : null}
+                      onToneSelect={t => draft.id && selectPendingTone(draft.id, t)}
+                      onToneGenerate={() => draft.id && generateWithTone(draft.id)}
+                      regenerating={regeneratingId === draft.id}
+                      onDelete={() => draft.id && deleteDraft(draft.id)}
+                      onUnsave={() => draft.id && unsaveDraft(draft.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 미리보기 + 발행 */}
           {selectedDraft && (
@@ -469,9 +547,11 @@ interface DraftCardProps {
   onToneGenerate: () => void
   regenerating: boolean
   onDelete: () => void
+  onSave?: () => void
+  onUnsave?: () => void
 }
 
-function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating, onDelete }: DraftCardProps) {
+function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating, onDelete, onSave, onUnsave }: DraftCardProps) {
   const hasPendingChange = pendingTone !== null && pendingTone !== draft.tone
   const [showEmoji, setShowEmoji] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -525,6 +605,24 @@ function DraftCard({ draft, displayIdx, selected, onSelect, onCopy, onUpdate, re
           <button onClick={e => { e.stopPropagation(); onCopy() }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <Copy className="w-3.5 h-3.5" />
           </button>
+          {onSave && (
+            <button
+              onClick={e => { e.stopPropagation(); onSave() }}
+              className="p-1.5 rounded-lg hover:bg-amber-50 text-gray-300 hover:text-amber-500 transition-colors"
+              title="저장"
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onUnsave && (
+            <button
+              onClick={e => { e.stopPropagation(); onUnsave() }}
+              className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-400 transition-colors"
+              title="저장 취소"
+            >
+              <BookmarkCheck className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={e => { e.stopPropagation(); onDelete() }}
             className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
