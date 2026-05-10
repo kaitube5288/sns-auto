@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
     .limit(20)
 
   // 트렌드 검색 (1시간 캐시 — API 쿼터 절약)
+  const kstNow = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const todayKST = kstNow.toISOString().slice(0, 10)
+  const yesterdayKST = new Date(kstNow.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
   const cacheKey = `trend_${profile.business_type}`
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
   const { data: cachedTrend } = await supabase
@@ -61,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   if (!trendSummary) {
     trendSummary = await searchTrends(
-      `오늘 날짜 기준 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
+      `${yesterdayKST}(전날)~${todayKST}(당일) 기준으로 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
     ).catch(() => '')
 
     if (trendSummary) {
