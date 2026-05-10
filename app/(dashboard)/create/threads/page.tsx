@@ -30,6 +30,7 @@ export default function ThreadsCreatePage() {
   const [refineInstructions, setRefineInstructions] = useState<Record<number, string>>({})
   const [refiningIdx, setRefiningIdx] = useState<number | null>(null)
   const [regeneratingIdx, setRegeneratingIdx] = useState<number | null>(null)
+  const [pendingTones, setPendingTones] = useState<Record<number, ContentTone | null>>({})
   const [publishImages, setPublishImages] = useState<File[]>([])
   const [publishPreviews, setPublishPreviews] = useState<string[]>([])
   const publishImageRef = useRef<HTMLInputElement>(null)
@@ -59,20 +60,28 @@ export default function ThreadsCreatePage() {
     }
   }
 
-  async function changeTone(idx: number, newTone: ContentTone) {
-    if (regeneratingIdx !== null) return
+  function selectPendingTone(idx: number, tone: ContentTone) {
+    setPendingTones(prev => ({ ...prev, [idx]: prev[idx] === tone ? null : tone }))
+  }
+
+  async function generateWithTone(idx: number) {
+    const newTone = pendingTones[idx]
+    if (!newTone) return
     setRegeneratingIdx(idx)
     try {
-      const res = await fetch('/api/generate/threads', {
+      const toneLabel = TONES.find(t => t.value === newTone)?.label ?? newTone
+      const res = await fetch('/api/generate/threads/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tones: [newTone], context_note: contextNote, mode, count: 1 }),
+        body: JSON.stringify({
+          caption: drafts[idx].caption,
+          instruction: `이 글의 내용과 소재는 그대로 유지하면서 '${toneLabel}' 말투로만 바꿔줘. 구조와 스토리는 변경하지 마.`,
+        }),
       })
       const data = await res.json()
       if (data.error) { alert(data.error); return }
-      if (data.drafts?.[0]) {
-        setDrafts(prev => prev.map((d, i) => i === idx ? { ...data.drafts[0] } : d))
-      }
+      setDrafts(prev => prev.map((d, i) => i === idx ? { ...d, caption: data.caption, tone: newTone } : d))
+      setPendingTones(prev => ({ ...prev, [idx]: null }))
     } catch {
       alert('톤 변경 중 오류가 발생했습니다.')
     } finally {
@@ -230,7 +239,9 @@ export default function ThreadsCreatePage() {
                     onRefineChange={v => setRefineInstructions(prev => ({ ...prev, [idx]: v }))}
                     onRefine={() => refine(idx)}
                     refining={refiningIdx === idx}
-                    onChangeTone={t => changeTone(idx, t)}
+                    pendingTone={pendingTones[idx] ?? null}
+                    onToneSelect={t => selectPendingTone(idx, t)}
+                    onToneGenerate={() => generateWithTone(idx)}
                     regenerating={regeneratingIdx === idx}
                   />
                 ))}
@@ -330,11 +341,15 @@ interface DraftCardProps {
   onRefineChange: (v: string) => void
   onRefine: () => void
   refining: boolean
-  onChangeTone: (t: ContentTone) => void
+  pendingTone: ContentTone | null
+  onToneSelect: (t: ContentTone) => void
+  onToneGenerate: () => void
   regenerating: boolean
 }
 
-function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, onChangeTone, regenerating }: DraftCardProps) {
+function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineInstruction, onRefineChange, onRefine, refining, pendingTone, onToneSelect, onToneGenerate, regenerating }: DraftCardProps) {
+  const hasPendingChange = pendingTone !== null && pendingTone !== draft.tone
+
   return (
     <div
       onClick={onSelect}
@@ -378,22 +393,40 @@ function DraftCard({ draft, idx, selected, onSelect, onCopy, onUpdate, refineIns
         <p className="text-xs text-gray-400 mt-2 border-t border-gray-50 pt-2 leading-relaxed">{draft.engagement_hook}</p>
       )}
 
-      {/* 톤 변경 칩 */}
-      <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-gray-100" onClick={e => e.stopPropagation()}>
-        {TONES.map(t => (
+      {/* 톤 선택 + 생성 버튼 */}
+      <div className="mt-2 pt-2 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {TONES.map(t => {
+            const isCurrent = draft.tone === t.value
+            const isPending = pendingTone === t.value
+            return (
+              <button
+                key={t.value}
+                onClick={() => onToneSelect(t.value)}
+                disabled={regenerating || refining}
+                className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors disabled:opacity-40 ${
+                  isPending && !isCurrent
+                    ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'
+                    : isCurrent
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                }`}
+              >
+                {t.emoji} {t.label}
+              </button>
+            )
+          })}
+        </div>
+        {hasPendingChange && (
           <button
-            key={t.value}
-            onClick={() => onChangeTone(t.value)}
+            onClick={onToneGenerate}
             disabled={regenerating || refining}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors disabled:opacity-40 ${
-              draft.tone === t.value
-                ? 'bg-indigo-100 text-indigo-700'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 disabled:opacity-50 transition-colors"
           >
-            {t.emoji} {t.label}
+            <Sparkles className="w-3 h-3" />
+            {TONES.find(t => t.value === pendingTone)?.label} 말투로 변환
           </button>
-        ))}
+        )}
       </div>
 
       {/* AI 수정 */}
