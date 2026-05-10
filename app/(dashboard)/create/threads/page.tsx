@@ -128,7 +128,11 @@ export default function ThreadsCreatePage() {
         formData.append('content_id', draft.id)
         await fetch('/api/media/upload', { method: 'POST', body: formData })
       }
-      const body: Record<string, unknown> = { content_id: draft.id }
+      const body: Record<string, unknown> = {
+        content_id: draft.id,
+        caption: draft.caption,
+        hashtags: draft.hashtags,
+      }
       if (!immediate && scheduledAt) body.scheduled_at = scheduledAt
       const endpoint = immediate ? '/api/publish/threads' : '/api/publish/schedule'
       const res = await fetch(endpoint, {

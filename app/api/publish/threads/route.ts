@@ -11,7 +11,15 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { content_id } = await req.json()
+  const { content_id, caption, hashtags } = await req.json()
+
+  // 수정된 내용이 있으면 발행 전에 DB 업데이트
+  if (caption !== undefined) {
+    await supabase.from('contents')
+      .update({ caption, hashtags: hashtags ?? [] })
+      .eq('id', content_id)
+      .eq('user_id', user.id)
+  }
 
   // 콘텐츠 + 계정 정보 조회
   const { data: content } = await supabase
