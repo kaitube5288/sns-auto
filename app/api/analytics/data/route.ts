@@ -6,14 +6,20 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: analytics } = await supabase
+  const { data: all } = await supabase
     .from('post_analytics')
     .select('*')
     .eq('user_id', user.id)
     .order('synced_at', { ascending: false })
-    .limit(30)
+    .limit(60)
 
-  const aiInsight = analytics?.find(a => a.ai_insight)?.ai_insight ?? null
+  const instagram = (all ?? []).filter(a => a.platform === 'instagram')
+  const threads = (all ?? []).filter(a => a.platform === 'threads')
 
-  return NextResponse.json({ analytics: analytics ?? [], aiInsight })
+  return NextResponse.json({
+    instagram,
+    threads,
+    igInsight: instagram.find(a => a.ai_insight)?.ai_insight ?? null,
+    threadsInsight: threads.find(a => a.ai_insight)?.ai_insight ?? null,
+  })
 }

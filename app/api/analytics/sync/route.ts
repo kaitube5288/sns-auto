@@ -1,88 +1,117 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
-import { getIGMediaInsights } from '@/lib/meta-api'
+import { getIGMediaInsights, getThreadsMediaInsights } from '@/lib/meta-api'
 import { decryptToken } from '@/lib/utils'
 import { generateText } from '@/lib/gemini'
 import { buildInsightPrompt } from '@/lib/prompts'
 
 export const maxDuration = 60
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: account } = await supabase
     .from('meta_accounts')
-    .select('instagram_user_id, instagram_access_token, instagram_connected')
+    .select('instagram_user_id, instagram_access_token, instagram_connected, threads_user_id, threads_access_token, threads_connected')
     .eq('user_id', user.id)
     .single()
 
-  if (!account?.instagram_connected) {
-    return NextResponse.json({ error: 'Instagram 계정을 먼저 연결해주세요.' }, { status: 400 })
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  let igSynced = 0
+  let threadsSynced = 0
+
+  // ── Instagram ──────────────────────────────────────────────
+  if (account?.instagram_connected && account.instagram_access_token) {
+    const igToken = decryptToken(account.instagram_access_token)
+    const { data: igContents } = await supabase
+      .from('contents')
+      .select('id, instagram_post_id, caption')
+      .eq('user_id', user.id)
+      .eq('status', 'published')
+      .not('instagram_post_id', 'is', null)
+      .gte('published_at', thirtyDaysAgo)
+
+    const igInsightRows: { caption: string; saves: number; reach: number; likes: number }[] = []
+
+    for (const c of (igContents ?? [])) {
+      try {
+        const insights = await getIGMediaInsights(c.instagram_post_id!, igToken)
+        const metrics = insights?.data ?? []
+        const get = (name: string) => metrics.find((m: { name: string; values: { value: number }[] }) => m.name === name)?.values?.[0]?.value ?? 0
+        const reach = get('reach')
+        const saves = get('saved')
+        const likes = get('likes')
+        const comments = get('comments')
+        await supabase.from('post_analytics').upsert({
+          user_id: user.id, content_id: c.id, platform: 'instagram', post_id: c.instagram_post_id!,
+          impressions: get('impressions'), reach, likes, comments, saves,
+          save_rate: reach > 0 ? parseFloat(((saves / reach) * 100).toFixed(2)) : 0,
+          engagement_rate: reach > 0 ? parseFloat((((likes + comments + saves) / reach) * 100).toFixed(2)) : 0,
+          synced_at: new Date().toISOString(),
+        }, { onConflict: 'platform,post_id' })
+        igInsightRows.push({ caption: c.caption ?? '', saves, reach, likes })
+        igSynced++
+      } catch {}
+    }
+
+    if (igInsightRows.length > 0) {
+      try {
+        const aiInsight = await generateText(buildInsightPrompt(igInsightRows))
+        await supabase.from('post_analytics').update({ ai_insight: aiInsight })
+          .eq('post_id', igContents![0].instagram_post_id!)
+      } catch {}
+    }
   }
 
-  const accessToken = decryptToken(account.instagram_access_token!)
+  // ── Threads ────────────────────────────────────────────────
+  if (account?.threads_connected && account.threads_access_token) {
+    const threadsToken = decryptToken(account.threads_access_token)
+    const { data: threadsContents } = await supabase
+      .from('contents')
+      .select('id, threads_post_id, caption')
+      .eq('user_id', user.id)
+      .eq('status', 'published')
+      .not('threads_post_id', 'is', null)
+      .gte('published_at', thirtyDaysAgo)
 
-  // 최근 30일 발행된 IG 게시물
-  const { data: contents } = await supabase
-    .from('contents')
-    .select('id, instagram_post_id, caption')
-    .eq('user_id', user.id)
-    .eq('status', 'published')
-    .not('instagram_post_id', 'is', null)
-    .gte('published_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+    const threadsInsightRows: { caption: string; saves: number; reach: number; likes: number }[] = []
 
-  if (!contents?.length) return NextResponse.json({ synced: 0 })
+    for (const c of (threadsContents ?? [])) {
+      try {
+        const insights = await getThreadsMediaInsights(c.threads_post_id!, threadsToken)
+        const metrics = insights?.data ?? []
+        const get = (name: string) => {
+          const m = metrics.find((x: { name: string; values?: { value: number }[]; value?: number }) => x.name === name)
+          return m?.values?.[0]?.value ?? m?.value ?? 0
+        }
+        const views = get('views')
+        const likes = get('likes')
+        const replies = get('replies')
+        const reposts = get('reposts')
+        const quotes = get('quotes')
+        const shares = reposts + quotes
+        await supabase.from('post_analytics').upsert({
+          user_id: user.id, content_id: c.id, platform: 'threads', post_id: c.threads_post_id!,
+          impressions: views, reach: views, likes, comments: replies, saves: shares,
+          save_rate: 0,
+          engagement_rate: views > 0 ? parseFloat((((likes + replies + shares) / views) * 100).toFixed(2)) : 0,
+          synced_at: new Date().toISOString(),
+        }, { onConflict: 'platform,post_id' })
+        threadsInsightRows.push({ caption: c.caption ?? '', saves: shares, reach: views, likes })
+        threadsSynced++
+      } catch {}
+    }
 
-  let synced = 0
-  const insightRows: { caption: string; saves: number; reach: number; likes: number }[] = []
-
-  for (const c of contents) {
-    try {
-      const insights = await getIGMediaInsights(c.instagram_post_id!, accessToken)
-      const metrics = insights?.data ?? []
-      const get = (name: string) => metrics.find((m: { name: string; values: { value: number }[] }) => m.name === name)?.values?.[0]?.value ?? 0
-
-      const reach = get('reach')
-      const saves = get('saved')
-      const likes = get('likes')
-      const comments = get('comments')
-
-      await supabase.from('post_analytics').upsert({
-        user_id: user.id,
-        content_id: c.id,
-        platform: 'instagram',
-        post_id: c.instagram_post_id!,
-        impressions: get('impressions'),
-        reach,
-        likes,
-        comments,
-        saves,
-        save_rate: reach > 0 ? parseFloat(((saves / reach) * 100).toFixed(2)) : 0,
-        engagement_rate: reach > 0 ? parseFloat((((likes + comments + saves) / reach) * 100).toFixed(2)) : 0,
-        synced_at: new Date().toISOString(),
-      }, { onConflict: 'platform,post_id' })
-
-      insightRows.push({ caption: c.caption ?? '', saves, reach, likes })
-      synced++
-    } catch {}
+    if (threadsInsightRows.length > 0) {
+      try {
+        const aiInsight = await generateText(buildInsightPrompt(threadsInsightRows))
+        await supabase.from('post_analytics').update({ ai_insight: aiInsight })
+          .eq('post_id', threadsContents![0].threads_post_id!)
+      } catch {}
+    }
   }
 
-  // AI 인사이트 생성
-  if (insightRows.length > 0) {
-    try {
-      const prompt = buildInsightPrompt(insightRows)
-      const aiInsight = await generateText(prompt)
-
-      // 가장 최근 게시물에 인사이트 저장
-      const latestPostId = contents[0].instagram_post_id!
-      await supabase
-        .from('post_analytics')
-        .update({ ai_insight: aiInsight })
-        .eq('post_id', latestPostId)
-    } catch {}
-  }
-
-  return NextResponse.json({ synced })
+  return NextResponse.json({ igSynced, threadsSynced })
 }

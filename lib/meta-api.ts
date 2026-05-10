@@ -168,3 +168,11 @@ export async function checkThreadsStatus(containerId: string, accessToken: strin
   )
   return res.json() as Promise<{ status: string; error_message?: string }>
 }
+
+// Threads 미디어 인사이트
+export async function getThreadsMediaInsights(mediaId: string, accessToken: string) {
+  const res = await fetch(
+    `${THREADS_BASE}/${mediaId}/insights?metric=views,likes,replies,reposts,quotes&access_token=${accessToken}`
+  )
+  return res.json()
+}
