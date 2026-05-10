@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   if (!trendSummary) {
     trendSummary = await searchTrends(
-      `${yesterdayKST}(전날)~${todayKST}(당일) 기준으로 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
+      `${yesterdayKST}(전날)~${todayKST}(당일) 기준으로 #자영업 #자영업자 #카페 #디저트카페 #자영업자의삶 키워드와 관련해서 한국 ${profile.business_type} 자영업자/소상공인 커뮤니티에서 화제인 이슈, 뉴스, 공감 포인트 5가지를 간단히 요약해줘. 최저임금, 임대료, 배달앱, 원가 상승, 손님 트렌드 등 관련 최신 내용 포함.`
     ).catch(() => '')
 
     if (trendSummary) {
