@@ -169,6 +169,22 @@ export async function checkThreadsStatus(containerId: string, accessToken: strin
   return res.json() as Promise<{ status: string; error_message?: string }>
 }
 
+// Threads 프로필 (팔로워 수 포함)
+export async function getThreadsProfile(accessToken: string) {
+  const res = await fetch(
+    `${THREADS_BASE}/me?fields=id,username,followers_count&access_token=${accessToken}`
+  )
+  return res.json() as Promise<{ id: string; username: string; followers_count: number }>
+}
+
+// Threads 게시물 댓글(답글) 조회
+export async function getThreadsReplies(mediaId: string, accessToken: string) {
+  const res = await fetch(
+    `${THREADS_BASE}/${mediaId}/replies?fields=id,text,username,timestamp&access_token=${accessToken}`
+  )
+  return res.json()
+}
+
 // Threads 미디어 인사이트
 export async function getThreadsMediaInsights(mediaId: string, accessToken: string) {
   const res = await fetch(

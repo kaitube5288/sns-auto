@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Link2, Settings2, PenSquare,
   CalendarDays, BarChart2, Zap, LogOut,
-  ChevronDown, MessageSquare, Image, Film
+  ChevronDown, MessageSquare, Image, Film, Activity
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createBrowserSupabase } from '@/lib/supabase-browser'
@@ -26,6 +26,7 @@ const NAV_TOP = [
 const NAV_BOTTOM = [
   { href: '/calendar',  label: '예약 캘린더', icon: CalendarDays },
   { href: '/analytics', label: '성과 분석',   icon: BarChart2 },
+  { href: '/activity',  label: '활동',        icon: Activity },
 ]
 
 export default function Sidebar() {
