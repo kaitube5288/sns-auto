@@ -189,14 +189,30 @@ export default function CalendarPage() {
                   <button
                     key={c.id}
                     onClick={() => setSelected(c)}
-                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:opacity-80 ${STATUS_STYLE[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                    className={`w-full text-left p-2 rounded-lg border text-xs transition-all hover:opacity-80 ${
+                      c.status === 'published'
+                        ? 'bg-gray-50 border-gray-200 text-gray-500'
+                        : STATUS_STYLE[c.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'
+                    }`}
                   >
-                    <div className="flex items-center gap-1 mb-0.5">
-                      <Share2 className="w-3 h-3" />
-                      <span className="font-medium">{STATUS_LABEL[c.status]}</span>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="flex items-center gap-1">
+                        <Share2 className="w-3 h-3" />
+                        <span className="font-medium truncate">{c.caption?.slice(0, 14)}...</span>
+                      </div>
+                      {c.status === 'published' && (
+                        <span className="flex-shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 bg-green-100 text-green-600 rounded-full text-[10px] font-medium">
+                          <CheckCircle2 className="w-2.5 h-2.5" />
+                          발행됨
+                        </span>
+                      )}
                     </div>
-                    <p className="truncate text-xs opacity-80">{c.caption?.slice(0, 20)}...</p>
-                    {(c.scheduled_at || c.published_at) && (
+                    {c.published_at && c.status === 'published' && (
+                      <p className="text-[10px] opacity-50 mt-0.5">
+                        {new Date(c.published_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                    {c.status !== 'published' && (c.scheduled_at || c.published_at) && (
                       <p className="text-xs opacity-60 mt-0.5">
                         {new Date(c.scheduled_at ?? c.published_at!).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                       </p>
