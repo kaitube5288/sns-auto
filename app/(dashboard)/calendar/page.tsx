@@ -235,14 +235,31 @@ export default function CalendarPage() {
               </div>
             )}
 
-            {/* 정상 예약 — 취소만 */}
+            {/* 정상 예약 — 시각 변경 + 취소 */}
             {selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) >= new Date() && (
-              <button
-                onClick={() => cancelSchedule(selected.id)}
-                className="w-full mt-4 py-2 rounded-xl border border-red-200 text-red-600 text-sm hover:bg-red-50"
-              >
-                예약 취소
-              </button>
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                <p className="text-xs font-medium text-gray-600">예약 시각 변경</p>
+                <input
+                  type="datetime-local"
+                  value={rescheduleAt}
+                  onChange={e => setRescheduleAt(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+                <button
+                  onClick={() => reschedule(selected.id)}
+                  disabled={rescheduling || !rescheduleAt}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${rescheduling ? 'animate-spin' : ''}`} />
+                  {rescheduling ? '변경 중...' : '시각 변경'}
+                </button>
+                <button
+                  onClick={() => cancelSchedule(selected.id)}
+                  className="w-full py-2 rounded-xl border border-red-200 text-red-600 text-sm hover:bg-red-50"
+                >
+                  예약 취소
+                </button>
+              </div>
             )}
           </div>
         </div>
