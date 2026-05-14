@@ -234,7 +234,7 @@ export default function ThreadsCreatePage() {
         caption: draft.caption,
         hashtags: draft.hashtags,
       }
-      if (!immediate && scheduledAt) body.scheduled_at = scheduledAt
+      if (!immediate && scheduledAt) body.scheduled_at = new Date(scheduledAt).toISOString()
       const endpoint = immediate ? '/api/publish/threads' : '/api/publish/schedule'
       const res = await fetch(endpoint, {
         method: 'POST',

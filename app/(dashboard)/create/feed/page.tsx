@@ -214,7 +214,7 @@ export default function FeedCreatePage() {
     setPublishing(true)
     try {
       const body: Record<string, unknown> = { content_id: drafts[selectedDraft].id }
-      if (!immediate && scheduledAt) body.scheduled_at = scheduledAt
+      if (!immediate && scheduledAt) body.scheduled_at = new Date(scheduledAt).toISOString()
       const res = await fetch(immediate ? '/api/publish/feed' : '/api/publish/schedule', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       })

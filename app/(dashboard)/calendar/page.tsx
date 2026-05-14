@@ -57,7 +57,7 @@ export default function CalendarPage() {
       const res = await fetch('/api/publish/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content_id: contentId, scheduled_at: rescheduleAt }),
+        body: JSON.stringify({ content_id: contentId, scheduled_at: new Date(rescheduleAt).toISOString() }),
       })
       const d = await res.json()
       if (d.error) { showToast(d.error); return }
