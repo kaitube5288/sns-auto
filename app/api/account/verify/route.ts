@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 import { decryptToken } from '@/lib/utils'
-import { getThreadsProfile } from '@/lib/meta-api'
+
+const THREADS_BASE = 'https://graph.threads.net/v1.0'
 
 export async function GET() {
   const supabase = await createServerSupabase()
@@ -20,13 +21,14 @@ export async function GET() {
 
   try {
     const token = decryptToken(acct.threads_access_token)
-    const profile = await getThreadsProfile(token)
+    const res = await fetch(`${THREADS_BASE}/me?fields=id,username&access_token=${token}`)
+    const data = await res.json() as { id?: string; username?: string; error?: { message: string } }
 
-    if (profile.error) {
-      return NextResponse.json({ ok: false, reason: profile.error.message })
+    if (data.error) {
+      return NextResponse.json({ ok: false, reason: data.error.message })
     }
 
-    return NextResponse.json({ ok: true, username: profile.username })
+    return NextResponse.json({ ok: true, username: data.username })
   } catch (e) {
     const msg = e instanceof Error ? e.message : '알 수 없는 오류'
     return NextResponse.json({ ok: false, reason: msg })
