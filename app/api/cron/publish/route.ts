@@ -14,10 +14,10 @@ export async function GET(req: NextRequest) {
 
   const admin = createAdminSupabase()
 
-  // 발행 대상 조회
+  // 발행 대상 조회 (meta_accounts join 없이)
   const { data: items } = await admin
     .from('contents')
-    .select('*, meta_accounts!inner(instagram_user_id, instagram_access_token, threads_user_id, threads_access_token)')
+    .select('*')
     .eq('status', 'scheduled')
     .lte('scheduled_at', new Date().toISOString())
     .order('scheduled_at', { ascending: true })
@@ -25,20 +25,33 @@ export async function GET(req: NextRequest) {
 
   if (!items?.length) return NextResponse.json({ processed: 0 })
 
+  // user_id 목록으로 meta_accounts 한 번에 조회
+  const userIds = [...new Set(items.map(i => i.user_id))]
+  const { data: accounts } = await admin
+    .from('meta_accounts')
+    .select('user_id, instagram_user_id, instagram_access_token, threads_user_id, threads_access_token')
+    .in('user_id', userIds)
+
+  const accountMap = Object.fromEntries((accounts ?? []).map(a => [a.user_id, a]))
+
   const results = { success: 0, failed: 0 }
 
   for (const item of items) {
+    const account = accountMap[item.user_id]
+    if (!account) {
+      await admin.from('contents').update({
+        status: 'failed',
+        publish_error: '연결된 계정 없음',
+        retry_count: (item.retry_count ?? 0) + 1,
+      }).eq('id', item.id)
+      results.failed++
+      continue
+    }
+
     // publishing 상태로 잠금
     await admin.from('contents').update({ status: 'publishing' }).eq('id', item.id)
 
     try {
-      const account = item.meta_accounts as {
-        instagram_user_id: string
-        instagram_access_token: string
-        threads_user_id: string
-        threads_access_token: string
-      }
-
       if (item.content_type === 'threads_text') {
         const token = decryptToken(account.threads_access_token)
         const text = item.hashtags?.length
