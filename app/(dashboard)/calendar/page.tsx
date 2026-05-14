@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Share2, Clock, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Share2, Clock, X, CheckCircle2, AlertCircle, RefreshCw, Send } from 'lucide-react'
 import { formatKST } from '@/lib/utils'
 import type { Content } from '@/lib/types'
 
@@ -26,6 +26,7 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState<Content | null>(null)
   const [rescheduleAt, setRescheduleAt] = useState('')
   const [rescheduling, setRescheduling] = useState(false)
+  const [publishing, setPublishing] = useState(false)
   const [toast, setToast] = useState('')
 
   // UTC ISO → datetime-local 입력용 로컬 시간 문자열 변환
@@ -95,6 +96,27 @@ export default function CalendarPage() {
     })
     setContents(prev => prev.filter(c => c.id !== contentId))
     setSelected(null)
+  }
+
+  async function publishNow(contentId: string, contentType: string) {
+    setPublishing(true)
+    try {
+      const endpoint = contentType === 'feed' ? '/api/publish/feed' : '/api/publish/threads'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content_id: contentId }),
+      })
+      const d = await res.json()
+      if (d.error) { showToast(d.error); return }
+      setContents(prev => prev.map(c =>
+        c.id === contentId ? { ...c, status: 'published', published_at: new Date().toISOString() } : c
+      ))
+      setSelected(null)
+      showToast('발행됐습니다!')
+    } finally {
+      setPublishing(false)
+    }
   }
 
   function contentsByDay(date: Date): Content[] {
@@ -224,15 +246,18 @@ export default function CalendarPage() {
               <p className="text-xs text-red-500 mt-2 bg-red-50 rounded-lg px-2 py-1.5">오류: {selected.publish_error}</p>
             )}
 
-            {/* 실패 또는 기간 지난 예약 — 재예약 UI */}
+            {/* 실패 또는 기간 지난 예약 — 즉시 발행 + 재예약 UI */}
             {(selected.status === 'failed' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
-                {selected.status === 'scheduled' && (
-                  <p className="text-xs text-amber-600 bg-amber-50 rounded-lg px-2 py-1.5">
-                    예약 시각이 지났습니다. 계정 재연결 후 cron이 실행되면 즉시 발행되거나, 아래에서 시각을 변경할 수 있습니다.
-                  </p>
-                )}
-                <p className="text-xs font-medium text-gray-600">재예약</p>
+                <button
+                  onClick={() => publishNow(selected.id, selected.content_type)}
+                  disabled={publishing}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-60"
+                >
+                  <Send className={`w-3.5 h-3.5 ${publishing ? 'animate-pulse' : ''}`} />
+                  {publishing ? '발행 중...' : '지금 발행'}
+                </button>
+                <p className="text-xs font-medium text-gray-600 pt-1">또는 재예약</p>
                 <input
                   type="datetime-local"
                   value={rescheduleAt}
