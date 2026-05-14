@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Share2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react'
+import { Share2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
 import { daysUntil, formatKST } from '@/lib/utils'
 
 interface AccountInfo {
@@ -14,13 +14,36 @@ interface AccountInfo {
   threads_token_expires_at: string | null
 }
 
+type VerifyState = 'idle' | 'checking' | 'ok' | 'fail'
+
 export default function ConnectPage() {
   const [account, setAccount] = useState<AccountInfo | null>(null)
   const [loading, setLoading] = useState(true)
+  const [verify, setVerify] = useState<VerifyState>('idle')
+  const [verifyMsg, setVerifyMsg] = useState('')
   const params = useSearchParams()
   const success = params.get('success')
   const igSuccess = params.get('ig_success')
   const error = params.get('error')
+
+  async function checkConnection() {
+    setVerify('checking')
+    setVerifyMsg('')
+    try {
+      const res = await fetch('/api/account/verify')
+      const d = await res.json()
+      if (d.ok) {
+        setVerify('ok')
+        setVerifyMsg(`@${d.username} 정상 연결됨`)
+      } else {
+        setVerify('fail')
+        setVerifyMsg(d.reason ?? '토큰 오류')
+      }
+    } catch {
+      setVerify('fail')
+      setVerifyMsg('네트워크 오류')
+    }
+  }
 
   useEffect(() => {
     fetch('/api/account/profile')
@@ -59,11 +82,37 @@ export default function ConnectPage() {
             <h2 className="font-semibold text-gray-900 text-lg">Threads 연결</h2>
             <p className="text-gray-500 text-sm mt-1">Threads 계정을 연결해 글을 자동 발행합니다</p>
           </div>
-          <a href="/api/auth/meta" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors">
-            <ExternalLink className="w-4 h-4" />
-            {account?.threads_connected ? '재연결' : '연결하기'}
-          </a>
+          <div className="flex items-center gap-2">
+            {account?.threads_connected && (
+              <button
+                onClick={checkConnection}
+                disabled={verify === 'checking'}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                <ShieldCheck className={`w-4 h-4 ${verify === 'checking' ? 'animate-pulse text-indigo-500' : ''}`} />
+                {verify === 'checking' ? '확인 중...' : '연결 확인'}
+              </button>
+            )}
+            <a href="/api/auth/meta" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors">
+              <ExternalLink className="w-4 h-4" />
+              {account?.threads_connected ? '재연결' : '연결하기'}
+            </a>
+          </div>
         </div>
+
+        {verify === 'ok' && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-green-50 border border-green-100 rounded-xl text-green-700 text-sm">
+            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+            {verifyMsg}
+          </div>
+        )}
+        {verify === 'fail' && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            토큰 오류 — {verifyMsg}. 재연결이 필요합니다.
+          </div>
+        )}
+
         {loading ? (
           <div className="h-16 bg-gray-100 rounded-xl animate-pulse" />
         ) : (
