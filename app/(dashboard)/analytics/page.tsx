@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { BarChart2, Heart, MessageCircle, Bookmark, Eye, Sparkles, RefreshCw, Share2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BarChart2, Heart, MessageCircle, Bookmark, Eye, Sparkles, RefreshCw, Share2, Pencil, Check, Brain } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
@@ -24,6 +24,10 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [tab, setTab] = useState<'instagram' | 'threads'>('instagram')
+  const [editingViews, setEditingViews] = useState<{ postId: string; value: string } | null>(null)
+  const [learnResult, setLearnResult] = useState<string | null>(null)
+  const [learning, setLearning] = useState(false)
+  const [patternsLearned, setPatternsLearned] = useState<number | null>(null)
 
   async function load() {
     setLoading(true)
@@ -43,6 +47,44 @@ export default function AnalyticsPage() {
       await load()
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function saveViews(postId: string, value: string) {
+    const impressions = parseInt(value, 10)
+    if (isNaN(impressions)) { setEditingViews(null); return }
+    await fetch('/api/analytics/data', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ post_id: postId, impressions }),
+    })
+    setData(prev => ({
+      ...prev,
+      threads: prev.threads.map(a =>
+        a.post_id === postId
+          ? { ...a, reach: impressions, impressions, engagement_rate: impressions > 0 ? parseFloat((((a.likes + a.comments + a.saves) / impressions) * 100).toFixed(1)) : a.engagement_rate }
+          : a
+      ),
+      instagram: prev.instagram.map(a =>
+        a.post_id === postId
+          ? { ...a, reach: impressions, impressions }
+          : a
+      ),
+    }))
+    setEditingViews(null)
+  }
+
+  async function analyze() {
+    setLearning(true)
+    setLearnResult(null)
+    try {
+      const res = await fetch('/api/analytics/learn', { method: 'POST' })
+      const d = await res.json()
+      if (d.error) { setLearnResult(`오류: ${d.error}`); return }
+      setLearnResult(d.analysis)
+      setPatternsLearned(d.patternsLearned)
+    } finally {
+      setLearning(false)
     }
   }
 
@@ -112,17 +154,17 @@ export default function AnalyticsPage() {
       {/* 지표 카드 */}
       {isThreads ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard icon={Eye}          label="평균 조회수"  value={Math.round(avgReach).toLocaleString()}       color="blue"   loading={loading} />
-          <MetricCard icon={Heart}        label="평균 좋아요"  value={Math.round(avgLikes).toLocaleString()}       color="pink"   loading={loading} />
-          <MetricCard icon={MessageCircle} label="평균 답글"   value={Math.round(avgComments).toLocaleString()}   color="indigo" loading={loading} />
-          <MetricCard icon={Share2}       label="평균 공유"    value={Math.round(avgSaves).toLocaleString()}      color="purple" loading={loading} />
+          <MetricCard icon={Eye}           label="평균 조회수" value={Math.round(avgReach).toLocaleString()}     color="blue"   loading={loading} />
+          <MetricCard icon={Heart}         label="평균 좋아요" value={Math.round(avgLikes).toLocaleString()}     color="pink"   loading={loading} />
+          <MetricCard icon={MessageCircle} label="평균 답글"   value={Math.round(avgComments).toLocaleString()} color="indigo" loading={loading} />
+          <MetricCard icon={Share2}        label="평균 공유"   value={Math.round(avgSaves).toLocaleString()}    color="purple" loading={loading} />
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard icon={Eye}       label="평균 도달수"  value={Math.round(avgReach).toLocaleString()}       color="blue"   loading={loading} />
-          <MetricCard icon={Bookmark}  label="평균 저장률"  value={`${avgSaveRate.toFixed(1)}%`}               color="indigo" loading={loading} />
-          <MetricCard icon={BarChart2} label="평균 참여율"  value={`${avgEngagement.toFixed(1)}%`}             color="purple" loading={loading} />
-          <MetricCard icon={Heart}     label="평균 좋아요"  value={Math.round(avgLikes).toLocaleString()}       color="pink"   loading={loading} />
+          <MetricCard icon={Eye}       label="평균 도달수" value={Math.round(avgReach).toLocaleString()}   color="blue"   loading={loading} />
+          <MetricCard icon={Bookmark}  label="평균 저장률" value={`${avgSaveRate.toFixed(1)}%`}           color="indigo" loading={loading} />
+          <MetricCard icon={BarChart2} label="평균 참여율" value={`${avgEngagement.toFixed(1)}%`}         color="purple" loading={loading} />
+          <MetricCard icon={Heart}     label="평균 좋아요" value={Math.round(avgLikes).toLocaleString()}   color="pink"   loading={loading} />
         </div>
       )}
 
@@ -171,40 +213,23 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* 게시물 목록 */}
+      {/* 게시물별 성과 목록 */}
       {!loading && list.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-gray-50">
             <h2 className="font-semibold text-gray-900 text-sm">게시물별 성과</h2>
+            {isThreads && <p className="text-xs text-gray-400 mt-0.5">조회수 아이콘 클릭 시 직접 입력 가능</p>}
           </div>
           <div className="divide-y divide-gray-50">
             {list.slice(0, 20).map(a => (
-              <div key={a.id} className="flex items-center gap-4 px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-400 font-mono truncate">{a.post_id}</p>
-                  <p className="text-xs text-gray-300 mt-0.5">{new Date(a.synced_at).toLocaleDateString('ko-KR')}</p>
-                </div>
-                {isThreads ? (
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.reach.toLocaleString()}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{a.likes}</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" />{a.comments}</span>
-                    <span className="flex items-center gap-1"><Share2 className="w-3 h-3" />{a.saves}</span>
-                    <span className="flex items-center gap-1 font-medium text-gray-700">
-                      {a.engagement_rate?.toFixed(1)}%
-                    </span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.reach.toLocaleString()}</span>
-                    <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{a.likes}</span>
-                    <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" />{a.saves}</span>
-                    <span className="flex items-center gap-1 font-medium text-indigo-600">
-                      {a.save_rate?.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-              </div>
+              <PostRow
+                key={a.id}
+                a={a}
+                isThreads={isThreads}
+                editingViews={editingViews}
+                setEditingViews={setEditingViews}
+                saveViews={saveViews}
+              />
             ))}
           </div>
         </div>
@@ -217,6 +242,124 @@ export default function AnalyticsPage() {
             {isThreads ? 'Threads' : 'Instagram'} 데이터가 없습니다.<br />
             데이터 동기화 버튼을 눌러 성과를 불러오세요
           </p>
+        </div>
+      )}
+
+      {/* AI 인기 게시물 분석 & 자동 학습 */}
+      {!loading && data.threads.length >= 2 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-indigo-500" />
+                <h2 className="font-semibold text-gray-900 text-sm">인기 게시물 AI 분석 & 자동 학습</h2>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">분석 결과가 글 생성에 자동으로 반영됩니다</p>
+            </div>
+            <button
+              onClick={analyze}
+              disabled={learning}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60"
+            >
+              <Sparkles className={`w-4 h-4 ${learning ? 'animate-pulse' : ''}`} />
+              {learning ? '분석 중...' : '분석 & 학습'}
+            </button>
+          </div>
+
+          {patternsLearned !== null && !learnResult?.startsWith('오류') && (
+            <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2">
+              <Check className="w-3.5 h-3.5" />
+              {patternsLearned}개 패턴이 학습됐습니다. 다음 글 생성 시 반영됩니다.
+            </div>
+          )}
+
+          {learnResult && (
+            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+              {learnResult}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PostRow({
+  a, isThreads, editingViews, setEditingViews, saveViews
+}: {
+  a: PostAnalytics
+  isThreads: boolean
+  editingViews: { postId: string; value: string } | null
+  setEditingViews: (v: { postId: string; value: string } | null) => void
+  saveViews: (postId: string, value: string) => void
+}) {
+  const isEditing = editingViews?.postId === a.post_id
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isEditing) inputRef.current?.focus()
+  }, [isEditing])
+
+  return (
+    <div className="relative group flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors">
+      {/* 캡션 호버 미리보기 */}
+      {a.caption && (
+        <div className="pointer-events-none absolute left-4 bottom-full mb-2 z-20 hidden group-hover:block w-72">
+          <div className="bg-gray-900 text-white text-xs rounded-xl px-3 py-2.5 shadow-lg leading-relaxed">
+            {a.caption.slice(0, 200)}{a.caption.length > 200 ? '...' : ''}
+          </div>
+          <div className="w-2 h-2 bg-gray-900 rotate-45 ml-4 -mt-1" />
+        </div>
+      )}
+
+      {/* 날짜 */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-gray-500 truncate">
+          {a.caption ? a.caption.slice(0, 28) + (a.caption.length > 28 ? '…' : '') : a.post_id.slice(-8)}
+        </p>
+        <p className="text-xs text-gray-300 mt-0.5">{new Date(a.synced_at).toLocaleDateString('ko-KR')}</p>
+      </div>
+
+      {/* 지표 */}
+      {isThreads ? (
+        <div className="flex items-center gap-3 text-xs text-gray-500">
+          {/* 조회수 — 클릭해서 수동 입력 */}
+          <span className="flex items-center gap-1">
+            {isEditing ? (
+              <span className="flex items-center gap-1">
+                <Eye className="w-3 h-3 text-indigo-500" />
+                <input
+                  ref={inputRef}
+                  type="number"
+                  value={editingViews!.value}
+                  onChange={e => setEditingViews({ postId: a.post_id, value: e.target.value })}
+                  onBlur={() => saveViews(a.post_id, editingViews!.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') saveViews(a.post_id, editingViews!.value) }}
+                  className="w-20 border border-indigo-300 rounded px-1.5 py-0.5 text-xs outline-none"
+                />
+              </span>
+            ) : (
+              <button
+                onClick={() => setEditingViews({ postId: a.post_id, value: String(a.reach) })}
+                className="flex items-center gap-1 hover:text-indigo-500 transition-colors"
+                title="클릭해서 조회수 직접 입력"
+              >
+                <Eye className="w-3 h-3" />{a.reach.toLocaleString()}
+                <Pencil className="w-2.5 h-2.5 opacity-0 group-hover:opacity-50" />
+              </button>
+            )}
+          </span>
+          <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{a.likes}</span>
+          <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" />{a.comments}</span>
+          <span className="flex items-center gap-1"><Share2 className="w-3 h-3" />{a.saves}</span>
+          <span className="font-medium text-gray-700 w-10 text-right">{a.engagement_rate?.toFixed(1)}%</span>
+        </div>
+      ) : (
+        <div className="flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{a.reach.toLocaleString()}</span>
+          <span className="flex items-center gap-1"><Heart className="w-3 h-3" />{a.likes}</span>
+          <span className="flex items-center gap-1"><Bookmark className="w-3 h-3" />{a.saves}</span>
+          <span className="font-medium text-indigo-600">{a.save_rate?.toFixed(1)}%</span>
         </div>
       )}
     </div>

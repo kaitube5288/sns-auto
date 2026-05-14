@@ -105,6 +105,7 @@ export interface PostAnalytics {
   engagement_rate: number | null
   ai_insight: string | null
   synced_at: string
+  caption?: string | null
 }
 
 export interface ThreadsDraft {
