@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase
     .from('contents')
-    .update({ status: 'scheduled', scheduled_at: scheduledDate.toISOString() })
+    .update({ status: 'scheduled', scheduled_at: scheduledDate.toISOString(), retry_count: 0, publish_error: null })
     .eq('id', content_id)
     .eq('user_id', user.id)
 
