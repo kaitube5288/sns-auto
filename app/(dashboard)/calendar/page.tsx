@@ -28,6 +28,13 @@ export default function CalendarPage() {
   const [rescheduling, setRescheduling] = useState(false)
   const [toast, setToast] = useState('')
 
+  // UTC ISO → datetime-local 입력용 로컬 시간 문자열 변환
+  function toDatetimeLocal(isoStr: string) {
+    const d = new Date(isoStr)
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
   const weekStart = getWeekStart(weekOffset)
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
@@ -44,6 +51,14 @@ export default function CalendarPage() {
       .then(d => setContents(d.contents ?? []))
       .finally(() => setLoading(false))
   }, [weekOffset])
+
+  useEffect(() => {
+    if (selected?.scheduled_at) {
+      setRescheduleAt(toDatetimeLocal(selected.scheduled_at))
+    } else {
+      setRescheduleAt('')
+    }
+  }, [selected])
 
   function showToast(msg: string) {
     setToast(msg)
