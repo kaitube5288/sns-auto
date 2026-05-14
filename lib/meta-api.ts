@@ -202,3 +202,19 @@ export async function getThreadsMediaInsights(mediaId: string, accessToken: stri
   )
   return res.json()
 }
+
+// Threads 미디어 직접 필드 (threads_manage_insights 없이도 접근 가능)
+export async function getThreadsMediaFields(mediaId: string, accessToken: string) {
+  const res = await fetch(
+    `${THREADS_BASE}/${mediaId}?fields=id,like_count,reply_count,repost_count,quote_count,timestamp&access_token=${accessToken}`
+  )
+  return res.json() as Promise<{
+    id?: string
+    like_count?: number
+    reply_count?: number
+    repost_count?: number
+    quote_count?: number
+    timestamp?: string
+    error?: { message: string }
+  }>
+}

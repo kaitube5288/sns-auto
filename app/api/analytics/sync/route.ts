@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
-import { getIGMediaInsights, getThreadsMediaInsights } from '@/lib/meta-api'
+import { getIGMediaInsights, getThreadsMediaInsights, getThreadsMediaFields } from '@/lib/meta-api'
 import { decryptToken } from '@/lib/utils'
 import { generateText } from '@/lib/gemini'
 import { buildInsightPrompt } from '@/lib/prompts'
@@ -103,10 +103,24 @@ export async function POST(_req: NextRequest) {
           return m?.values?.[0]?.value ?? m?.value ?? 0
         }
         const views = get('views')
-        const likes = get('likes')
-        const replies = get('replies')
-        const reposts = get('reposts')
-        const quotes = get('quotes')
+        let likes = get('likes')
+        let replies = get('replies')
+        let reposts = get('reposts')
+        let quotes = get('quotes')
+
+        // insights로 좋아요 등이 0이면 미디어 직접 필드로 보완
+        if (likes === 0 || replies === 0) {
+          try {
+            const fields = await getThreadsMediaFields(c.threads_post_id!, threadsToken)
+            if (!fields.error) {
+              if (likes === 0 && (fields.like_count ?? 0) > 0) likes = fields.like_count!
+              if (replies === 0 && (fields.reply_count ?? 0) > 0) replies = fields.reply_count!
+              if (reposts === 0 && (fields.repost_count ?? 0) > 0) reposts = fields.repost_count!
+              if (quotes === 0 && (fields.quote_count ?? 0) > 0) quotes = fields.quote_count!
+            }
+          } catch {}
+        }
+
         const shares = reposts + quotes
         await supabase.from('post_analytics').upsert({
           user_id: user.id, content_id: c.id, platform: 'threads', post_id: c.threads_post_id!,
