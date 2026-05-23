@@ -124,7 +124,7 @@ export default function ThreadsCreatePage() {
   async function refine(id: string) {
     const instruction = refineInstructions[id]?.trim()
     if (!instruction) return
-    const draft = drafts.find(d => d.id === id)
+    const draft = drafts.find(d => d.id === id) ?? savedDrafts.find(d => d.id === id)
     if (!draft) return
     setRefiningId(id)
     try {
@@ -151,7 +151,7 @@ export default function ThreadsCreatePage() {
   async function generateWithTone(id: string) {
     const newTone = pendingTones[id]
     if (!newTone) return
-    const draft = drafts.find(d => d.id === id)
+    const draft = drafts.find(d => d.id === id) ?? savedDrafts.find(d => d.id === id)
     if (!draft) return
     setRegeneratingId(id)
     try {
@@ -219,7 +219,7 @@ export default function ThreadsCreatePage() {
   }
 
   async function publish(immediate: boolean) {
-    const draft = drafts.find(d => d.id === selectedId)
+    const draft = drafts.find(d => d.id === selectedId) ?? savedDrafts.find(d => d.id === selectedId)
     if (!draft) return
     setPublishing(true)
     try {
@@ -304,7 +304,7 @@ export default function ThreadsCreatePage() {
     })
   }
 
-  const selectedDraft = drafts.find(d => d.id === selectedId) ?? null
+  const selectedDraft = drafts.find(d => d.id === selectedId) ?? savedDrafts.find(d => d.id === selectedId) ?? null
   const groups = groupBySession(drafts)
 
   return (
