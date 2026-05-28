@@ -310,20 +310,28 @@ export default function ThreadsCreatePage() {
   return (
     <div className="space-y-5">
       {/* 헤더 */}
-      <div className="relative flex items-center">
-        <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
-          <button onClick={() => setActiveTab('generate')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
-          <button onClick={() => setActiveTab('learn')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
+      <div className="space-y-3">
+        {/* 모바일: 제목 상단 */}
+        <div className="text-center sm:hidden">
+          <h1 className="text-xl font-bold text-gray-900">Threads 글 생성기</h1>
+          <p className="text-gray-500 text-xs mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
         </div>
-        <div className="absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
-          <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
-          <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
-        </div>
-        <div className="ml-auto flex flex-col items-center gap-1.5 flex-shrink-0">
-          <span className="text-xs text-gray-400 font-medium">학습범위</span>
-          <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-            <button onClick={() => setMode('solo')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'solo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>단독</button>
-            <button onClick={() => setMode('combined')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'combined' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>통합</button>
+        <div className="relative flex items-center justify-between">
+          <div className="flex bg-gray-100 rounded-xl p-1 gap-1 flex-shrink-0">
+            <button onClick={() => setActiveTab('generate')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'generate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>✨ 생성하기</button>
+            <button onClick={() => setActiveTab('learn')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'learn' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>📚 학습하기</button>
+          </div>
+          {/* PC: 제목 중앙 */}
+          <div className="hidden sm:block absolute left-1/2 -translate-x-1/2 text-center pointer-events-none">
+            <h1 className="text-2xl font-bold text-gray-900">Threads 글 생성기</h1>
+            <p className="text-gray-500 text-sm mt-0.5">AI가 브랜드에 맞는 Threads 게시물을 작성합니다</p>
+          </div>
+          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+            <span className="text-xs text-gray-400 font-medium">학습범위</span>
+            <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+              <button onClick={() => setMode('solo')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'solo' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>단독</button>
+              <button onClick={() => setMode('combined')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${mode === 'combined' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>통합</button>
+            </div>
           </div>
         </div>
       </div>
@@ -339,7 +347,7 @@ export default function ThreadsCreatePage() {
       {activeTab === 'generate' && (
         <div className="space-y-4">
           {/* 특이사항 + 생성 버튼 */}
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-indigo-400"
               placeholder="오늘의 특이사항 (선택) — 예: 비 오는 날 쿠키가 잘 나감"
@@ -350,7 +358,7 @@ export default function ThreadsCreatePage() {
             <button
               onClick={generate}
               disabled={loading}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors disabled:opacity-60 whitespace-nowrap"
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-500 text-white font-medium hover:bg-indigo-600 transition-colors disabled:opacity-60 whitespace-nowrap"
             >
               {loading
                 ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> 생성 중...</>
@@ -382,7 +390,7 @@ export default function ThreadsCreatePage() {
 
                 {/* 카드 그리드 */}
                 {isOpen && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {group.drafts.map((draft, displayIdx) => (
                       <DraftCard
                         key={draft.id}
