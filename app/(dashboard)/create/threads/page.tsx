@@ -161,7 +161,8 @@ export default function ThreadsCreatePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caption: draft.caption,
-          instruction: `이 글의 내용과 소재는 그대로 유지하면서 '${toneLabel}' 말투로만 바꿔줘. 구조와 스토리는 변경하지 마.`,
+          tone: newTone,
+          instruction: `'${toneLabel}' 말투로만 바꿔줘. 내용·소재·구조·스토리는 절대 변경하지 마.`,
         }),
       })
       const data = await res.json()

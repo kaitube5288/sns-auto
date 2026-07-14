@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabase } from '@/lib/supabase'
 import { generateText } from '@/lib/gemini'
+import { TONE_GUIDE } from '@/lib/prompts'
+import type { ContentTone } from '@/lib/types'
 
 export const maxDuration = 30
 
@@ -9,21 +11,26 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { caption, instruction } = await req.json()
+  const { caption, instruction, tone } = await req.json()
   if (!caption || !instruction) return NextResponse.json({ error: '내용을 입력해주세요.' }, { status: 400 })
 
-  const prompt = `다음 Threads 게시물을 수정해줘.
+  const toneGuide = tone && TONE_GUIDE[tone as ContentTone] ? `\n[바꿀 말투: ${tone}]\n${TONE_GUIDE[tone as ContentTone]}\n` : ''
 
-현재 글:
+  const prompt = `너는 한국 자영업자 Threads 글의 말투만 바꿔주는 편집자야.
+
+[원본 글 — 내용·소재·사실·수치·에피소드·전개 순서를 절대 바꾸지 마]
 ${caption}
-
-수정 지시사항: ${instruction}
-
-규칙:
-- 한국 자영업자 Threads 말투 유지 (한 문장씩 줄바꿈)
-- "~습니다/~입니다" 절대 금지 → "~거든" "~임" "~더라고" "~한 것 같음" 사용
+${toneGuide}
+[절대 금지]
+- 원본에 없는 내용·에피소드·감정 추가 금지
+- 원본의 숫자·사실·장소·인물 변경 금지
+- 원본의 전개 순서 변경 금지
+- "~습니다/~입니다" 금지 → "~거든" "~임" "~더라고" "~한 것 같음" 사용
 - 홍보 문구 금지
-- 수정된 글 텍스트만 반환 (설명, 따옴표, JSON 없이 글 본문만)`
+
+추가 지시: ${instruction}
+
+수정된 글 텍스트만 반환 (설명, 따옴표, JSON 없이 글 본문만)`
 
   try {
     const text = await generateText(prompt)
