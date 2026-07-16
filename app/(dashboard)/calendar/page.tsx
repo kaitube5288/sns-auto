@@ -231,8 +231,9 @@ export default function CalendarPage() {
 
       {selected && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setSelected(null); setRescheduleAt('') }}>
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            {/* 고정 헤더 */}
+            <div className="flex justify-between items-start p-6 pb-4 flex-shrink-0">
               <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLE[selected.status]}`}>
                 {selected.status === 'published' && <CheckCircle2 className="w-3 h-3" />}
                 {selected.status === 'failed' && <AlertCircle className="w-3 h-3" />}
@@ -244,20 +245,42 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <p className="text-sm text-gray-800 whitespace-pre-wrap mb-3 line-clamp-4">{selected.caption}</p>
-            {selected.hashtags?.length ? (
-              <p className="text-xs text-indigo-500 mb-2">{selected.hashtags.map(t => `#${t}`).join(' ')}</p>
-            ) : null}
+            {/* 스크롤 가능한 본문 */}
+            <div className="overflow-y-auto flex-1 px-6 pb-6 space-y-3">
+              {/* 이미지 미리보기 */}
+              {selected.media_urls?.length ? (
+                <div className={`grid gap-1.5 ${
+                  selected.media_urls.length === 1 ? 'grid-cols-1' :
+                  selected.media_urls.length === 2 ? 'grid-cols-2' :
+                  'grid-cols-3'
+                }`}>
+                  {selected.media_urls.map((url, i) => (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
 
-            {selected.scheduled_at && (
-              <p className="text-xs text-gray-400">예약: {formatKST(selected.scheduled_at)}</p>
-            )}
-            {selected.published_at && (
-              <p className="text-xs text-gray-400">발행: {formatKST(selected.published_at)}</p>
-            )}
-            {selected.publish_error && (
-              <p className="text-xs text-red-500 mt-2 bg-red-50 rounded-lg px-2 py-1.5">오류: {selected.publish_error}</p>
-            )}
+              {/* 본문 전체 표시 */}
+              <p className="text-sm text-gray-800 whitespace-pre-wrap">{selected.caption}</p>
+
+              {selected.hashtags?.length ? (
+                <p className="text-xs text-indigo-500">{selected.hashtags.map(t => `#${t}`).join(' ')}</p>
+              ) : null}
+
+              <div className="space-y-0.5">
+                {selected.scheduled_at && (
+                  <p className="text-xs text-gray-400">예약: {formatKST(selected.scheduled_at)}</p>
+                )}
+                {selected.published_at && (
+                  <p className="text-xs text-gray-400">발행: {formatKST(selected.published_at)}</p>
+                )}
+              </div>
+
+              {selected.publish_error && (
+                <p className="text-xs text-red-500 bg-red-50 rounded-lg px-2 py-1.5">오류: {selected.publish_error}</p>
+              )}
 
             {/* 실패 / 오발행 / 기간 지난 예약 — 즉시 발행 + 재예약 UI */}
             {(selected.status === 'failed' || selected.status === 'published' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
@@ -293,7 +316,7 @@ export default function CalendarPage() {
 
             {/* 정상 예약 — 시각 변경 + 취소 */}
             {selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) >= new Date() && (
-              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+              <div className="pt-4 border-t border-gray-100 space-y-2">
                 <p className="text-xs font-medium text-gray-600">예약 시각 변경</p>
                 <input
                   type="datetime-local"
@@ -317,6 +340,7 @@ export default function CalendarPage() {
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
