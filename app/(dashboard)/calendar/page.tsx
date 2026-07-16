@@ -259,16 +259,19 @@ export default function CalendarPage() {
               <p className="text-xs text-red-500 mt-2 bg-red-50 rounded-lg px-2 py-1.5">오류: {selected.publish_error}</p>
             )}
 
-            {/* 실패 또는 기간 지난 예약 — 즉시 발행 + 재예약 UI */}
-            {(selected.status === 'failed' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
+            {/* 실패 / 오발행 / 기간 지난 예약 — 즉시 발행 + 재예약 UI */}
+            {(selected.status === 'failed' || selected.status === 'published' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                {selected.status === 'published' && (
+                  <p className="text-xs text-amber-600 text-center">실제 발행이 확인되지 않은 경우 재시도하세요</p>
+                )}
                 <button
                   onClick={() => publishNow(selected.id, selected.content_type)}
                   disabled={publishing}
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-xl bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 disabled:opacity-60"
                 >
                   <Send className={`w-3.5 h-3.5 ${publishing ? 'animate-pulse' : ''}`} />
-                  {publishing ? '발행 중...' : '지금 발행'}
+                  {publishing ? '발행 중...' : selected.status === 'published' ? '재발행' : '지금 발행'}
                 </button>
                 <p className="text-xs font-medium text-gray-600 pt-1">또는 재예약</p>
                 <input
