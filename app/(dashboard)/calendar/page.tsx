@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Share2, Clock, X, CheckCircle2, AlertCircle, RefreshCw, Send } from 'lucide-react'
 import { formatKST } from '@/lib/utils'
 import type { Content } from '@/lib/types'
@@ -28,6 +28,14 @@ export default function CalendarPage() {
   const [rescheduling, setRescheduling] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [toast, setToast] = useState('')
+  const [editMode, setEditMode] = useState(false)
+  const [editCaption, setEditCaption] = useState('')
+  const [editHashtags, setEditHashtags] = useState('')
+  const [editMediaUrls, setEditMediaUrls] = useState<string[]>([])
+  const [newImages, setNewImages] = useState<File[]>([])
+  const [newPreviews, setNewPreviews] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const editImageRef = useRef<HTMLInputElement>(null)
 
   // UTC ISO → datetime-local 입력용 로컬 시간 문자열 변환
   function toDatetimeLocal(isoStr: string) {
@@ -96,6 +104,53 @@ export default function CalendarPage() {
     })
     setContents(prev => prev.filter(c => c.id !== contentId))
     setSelected(null)
+  }
+
+  function enterEdit() {
+    if (!selected) return
+    setEditCaption(selected.caption ?? '')
+    setEditHashtags(selected.hashtags?.map(t => `#${t}`).join(' ') ?? '')
+    setEditMediaUrls(selected.media_urls ?? [])
+    setNewImages([])
+    setNewPreviews([])
+    setEditMode(true)
+  }
+
+  function exitEdit() {
+    setEditMode(false)
+    setNewImages([])
+    setNewPreviews([])
+  }
+
+  async function saveEdit() {
+    if (!selected) return
+    setSaving(true)
+    try {
+      let finalUrls = [...editMediaUrls]
+      if (newImages.length > 0) {
+        const fd = new FormData()
+        newImages.forEach(f => fd.append('images', f))
+        fd.append('content_id', selected.id)
+        const res = await fetch('/api/media/upload', { method: 'POST', body: fd })
+        const data = await res.json()
+        finalUrls = [...finalUrls, ...(data.urls ?? [])]
+      }
+      const hashtags = editHashtags.split(/\s+/).filter(Boolean).map(t => t.replace(/^#/, ''))
+      await fetch('/api/generate/threads', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selected.id, caption: editCaption, hashtags, media_urls: finalUrls }),
+      })
+      const updated = { ...selected, caption: editCaption, hashtags, media_urls: finalUrls }
+      setContents(prev => prev.map(c => c.id === selected.id ? updated : c))
+      setSelected(updated)
+      setEditMode(false)
+      setNewImages([])
+      setNewPreviews([])
+      showToast('수정됐습니다!')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function publishNow(contentId: string, contentType: string) {
@@ -230,7 +285,7 @@ export default function CalendarPage() {
       )}
 
       {selected && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setSelected(null); setRescheduleAt('') }}>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => { setSelected(null); setRescheduleAt(''); exitEdit() }}>
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* 고정 헤더 */}
             <div className="flex justify-between items-start p-6 pb-4 flex-shrink-0">
@@ -240,34 +295,123 @@ export default function CalendarPage() {
                 {selected.status === 'scheduled' && <Clock className="w-3 h-3" />}
                 {STATUS_LABEL[selected.status]}
               </span>
-              <button onClick={() => { setSelected(null); setRescheduleAt('') }}>
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selected.status !== 'publishing' && !editMode && (
+                  <button onClick={enterEdit} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium px-2 py-1 rounded-lg hover:bg-indigo-50">
+                    수정
+                  </button>
+                )}
+                <button onClick={() => { setSelected(null); setRescheduleAt(''); exitEdit() }}>
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
             </div>
 
             {/* 스크롤 가능한 본문 */}
             <div className="overflow-y-auto flex-1 px-6 pb-6 space-y-3">
-              {/* 이미지 미리보기 */}
-              {selected.media_urls?.length ? (
-                <div className={`grid gap-1.5 ${
-                  selected.media_urls.length === 1 ? 'grid-cols-1' :
-                  selected.media_urls.length === 2 ? 'grid-cols-2' :
-                  'grid-cols-3'
-                }`}>
-                  {selected.media_urls.map((url, i) => (
-                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
-                      <img src={url} alt="" className="w-full h-full object-cover" />
+              {/* 이미지 영역 */}
+              {editMode ? (
+                <div>
+                  {(editMediaUrls.length + newPreviews.length) > 0 && (
+                    <div className={`grid gap-1.5 mb-2 ${
+                      (editMediaUrls.length + newPreviews.length) === 1 ? 'grid-cols-1' :
+                      (editMediaUrls.length + newPreviews.length) === 2 ? 'grid-cols-2' :
+                      'grid-cols-3'
+                    }`}>
+                      {editMediaUrls.map((url, i) => (
+                        <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => setEditMediaUrls(prev => prev.filter((_, idx) => idx !== i))}
+                            className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
+                      {newPreviews.map((src, i) => (
+                        <div key={`new-${i}`} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                          <img src={src} alt="" className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => {
+                              setNewImages(p => p.filter((_, idx) => idx !== i))
+                              setNewPreviews(p => p.filter((_, idx) => idx !== i))
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center"
+                          >
+                            <X className="w-3 h-3 text-white" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                  {(editMediaUrls.length + newPreviews.length) < 4 && (
+                    <button
+                      onClick={() => editImageRef.current?.click()}
+                      className="w-full py-2 rounded-xl border-2 border-dashed border-gray-200 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-400"
+                    >
+                      + 사진 추가
+                    </button>
+                  )}
+                  <input
+                    ref={editImageRef}
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const files = Array.from(e.target.files ?? []).slice(0, 4 - editMediaUrls.length - newImages.length)
+                      setNewImages(prev => [...prev, ...files])
+                      files.forEach(f => {
+                        const r = new FileReader()
+                        r.onload = ev => setNewPreviews(p => [...p, ev.target?.result as string])
+                        r.readAsDataURL(f)
+                      })
+                      e.target.value = ''
+                    }}
+                  />
                 </div>
-              ) : null}
+              ) : (
+                selected.media_urls?.length ? (
+                  <div className={`grid gap-1.5 ${
+                    selected.media_urls.length === 1 ? 'grid-cols-1' :
+                    selected.media_urls.length === 2 ? 'grid-cols-2' :
+                    'grid-cols-3'
+                  }`}>
+                    {selected.media_urls.map((url, i) => (
+                      <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
+                        <img src={url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                ) : null
+              )}
 
-              {/* 본문 전체 표시 */}
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{selected.caption}</p>
+              {/* 본문 */}
+              {editMode ? (
+                <textarea
+                  value={editCaption}
+                  onChange={e => setEditCaption(e.target.value)}
+                  rows={6}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400 resize-none"
+                />
+              ) : (
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{selected.caption}</p>
+              )}
 
-              {selected.hashtags?.length ? (
-                <p className="text-xs text-indigo-500">{selected.hashtags.map(t => `#${t}`).join(' ')}</p>
-              ) : null}
+              {/* 해시태그 */}
+              {editMode ? (
+                <input
+                  value={editHashtags}
+                  onChange={e => setEditHashtags(e.target.value)}
+                  placeholder="#해시태그 #태그2"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+              ) : (
+                selected.hashtags?.length ? (
+                  <p className="text-xs text-indigo-500">{selected.hashtags.map(t => `#${t}`).join(' ')}</p>
+                ) : null
+              )}
 
               <div className="space-y-0.5">
                 {selected.scheduled_at && (
@@ -282,8 +426,21 @@ export default function CalendarPage() {
                 <p className="text-xs text-red-500 bg-red-50 rounded-lg px-2 py-1.5">오류: {selected.publish_error}</p>
               )}
 
+              {/* 수정 모드 저장/취소 */}
+              {editMode && (
+                <div className="flex gap-2 pt-2 border-t border-gray-100">
+                  <button onClick={exitEdit} className="flex-1 py-2 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">
+                    취소
+                  </button>
+                  <button onClick={saveEdit} disabled={saving}
+                    className="flex-1 py-2 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-600 disabled:opacity-60">
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              )}
+
             {/* 실패 / 오발행 / 기간 지난 예약 — 즉시 발행 + 재예약 UI */}
-            {(selected.status === 'failed' || selected.status === 'published' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
+            {!editMode && (selected.status === 'failed' || selected.status === 'published' || (selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) < new Date())) && (
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                 {selected.status === 'published' && (
                   <p className="text-xs text-amber-600 text-center">실제 발행이 확인되지 않은 경우 재시도하세요</p>
@@ -315,7 +472,7 @@ export default function CalendarPage() {
             )}
 
             {/* 정상 예약 — 시각 변경 + 취소 */}
-            {selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) >= new Date() && (
+            {!editMode && selected.status === 'scheduled' && selected.scheduled_at && new Date(selected.scheduled_at) >= new Date() && (
               <div className="pt-4 border-t border-gray-100 space-y-2">
                 <p className="text-xs font-medium text-gray-600">예약 시각 변경</p>
                 <input
