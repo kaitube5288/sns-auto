@@ -43,7 +43,9 @@ export async function createIGImageContainer(igUserId: string, accessToken: stri
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `IG media container failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Instagram 캐러셀 컨테이너 생성
@@ -58,7 +60,9 @@ export async function createIGCarouselContainer(igUserId: string, accessToken: s
       access_token: accessToken,
     }),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `IG carousel container failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Instagram 미디어 발행
@@ -68,7 +72,9 @@ export async function publishIGMedia(igUserId: string, accessToken: string, crea
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ creation_id: creationId, access_token: accessToken }),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `IG publish failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Instagram Insights
@@ -118,7 +124,9 @@ export async function createThreadsContainer(threadsUserId: string, accessToken:
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Threads container failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Threads 캐러셀 아이템 컨테이너 생성 (이미지 각각)
@@ -133,7 +141,9 @@ export async function createThreadsCarouselItem(threadsUserId: string, accessTok
       access_token: accessToken,
     }),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Threads carousel item failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Threads 캐러셀 컨테이너 생성
@@ -148,7 +158,9 @@ export async function createThreadsCarouselContainer(threadsUserId: string, acce
       access_token: accessToken,
     }),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Threads carousel container failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Threads 게시물 발행
@@ -158,7 +170,9 @@ export async function publishThreads(threadsUserId: string, accessToken: string,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ creation_id: creationId, access_token: accessToken }),
   })
-  return res.json() as Promise<{ id: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Threads publish failed (${res.status})`)
+  return data as { id: string }
 }
 
 // Threads 컨테이너 상태 확인 (발행 전 준비 확인)
@@ -166,7 +180,9 @@ export async function checkThreadsStatus(containerId: string, accessToken: strin
   const res = await fetch(
     `${THREADS_BASE}/${containerId}?fields=status,error_message&access_token=${accessToken}`
   )
-  return res.json() as Promise<{ status: string; error_message?: string }>
+  const data = await res.json()
+  if (!res.ok || data.error) throw new Error(data.error?.message ?? `Threads status check failed (${res.status})`)
+  return data as { status: string; error_message?: string }
 }
 
 // Threads 프로필 (팔로워 수 포함)

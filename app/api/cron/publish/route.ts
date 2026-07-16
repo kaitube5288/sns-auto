@@ -81,6 +81,9 @@ export async function GET(req: NextRequest) {
           await new Promise(r => setTimeout(r, 3000))
           const status = await checkThreadsStatus(containerId, token)
           if (status.status === 'FINISHED') break
+          if (status.status === 'ERROR') {
+            throw new Error(status.error_message ?? 'Threads container processing failed')
+          }
         }
 
         const published = await publishThreads(account.threads_user_id, token, containerId)
