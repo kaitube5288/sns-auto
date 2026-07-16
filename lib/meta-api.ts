@@ -34,6 +34,15 @@ export async function refreshLongLivedToken(token: string) {
   return res.json() as Promise<{ access_token: string; token_type: string; expires_in: number }>
 }
 
+export async function refreshThreadsLongLivedToken(token: string) {
+  const params = new URLSearchParams({
+    grant_type: 'th_refresh_token',
+    access_token: token,
+  })
+  const res = await fetch(`${THREADS_BASE}/refresh_access_token?${params}`)
+  return res.json() as Promise<{ access_token: string; token_type: string; expires_in: number }>
+}
+
 // Instagram 이미지 컨테이너 생성
 export async function createIGImageContainer(igUserId: string, accessToken: string, imageUrl: string, caption?: string) {
   const params: Record<string, string> = { image_url: imageUrl, access_token: accessToken }
