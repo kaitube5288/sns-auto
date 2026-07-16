@@ -9,9 +9,16 @@ export default async function DashboardPage() {
   // 계정 정보
   const { data: account } = await supabase
     .from('meta_accounts')
-    .select('instagram_username, instagram_connected, threads_username, threads_connected')
+    .select('instagram_username, instagram_connected, threads_username, threads_connected, instagram_token_expires_at, threads_token_expires_at')
     .eq('user_id', user!.id)
     .single()
+
+  const calcDays = (d: string) => Math.ceil((new Date(d).getTime() - Date.now()) / 86400000)
+  const expiryWarnings: string[] = []
+  if (account?.instagram_token_expires_at && calcDays(account.instagram_token_expires_at) <= 14)
+    expiryWarnings.push(`Instagram (${calcDays(account.instagram_token_expires_at)}일 후 만료)`)
+  if (account?.threads_token_expires_at && calcDays(account.threads_token_expires_at) <= 14)
+    expiryWarnings.push(`Threads (${calcDays(account.threads_token_expires_at)}일 후 만료)`)
 
   // 최근 콘텐츠
   const { data: contents } = await supabase
@@ -64,6 +71,17 @@ export default async function DashboardPage() {
             연결하기 <ChevronRight className="w-4 h-4" />
           </Link>
         </div>
+      )}
+
+      {/* 토큰 만료 임박 배너 */}
+      {expiryWarnings.length > 0 && (
+        <Link href="/connect" className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors">
+          <div className="flex items-center gap-2 text-amber-700 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span><b>{expiryWarnings.join(', ')}</b> — 재연결이 필요합니다</span>
+          </div>
+          <ChevronRight className="w-4 h-4 text-amber-500 flex-shrink-0" />
+        </Link>
       )}
 
       {/* 요약 카드 */}

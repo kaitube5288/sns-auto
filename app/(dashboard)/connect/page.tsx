@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Share2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Share2, CheckCircle2, AlertCircle, ExternalLink, RefreshCw, ShieldCheck, Bell, BellOff } from 'lucide-react'
 import { daysUntil, formatKST } from '@/lib/utils'
 
 interface AccountInfo {
@@ -21,10 +21,43 @@ export default function ConnectPage() {
   const [loading, setLoading] = useState(true)
   const [verify, setVerify] = useState<VerifyState>('idle')
   const [verifyMsg, setVerifyMsg] = useState('')
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
+  const [pushSupported, setPushSupported] = useState(false)
   const params = useSearchParams()
   const success = params.get('success')
   const igSuccess = params.get('ig_success')
   const error = params.get('error')
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return
+    setPushSupported(true)
+    navigator.serviceWorker.register('/sw.js').then(reg =>
+      reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub))
+    )
+  }, [])
+
+  async function togglePush() {
+    setPushLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const existing = await reg.pushManager.getSubscription()
+      if (existing) {
+        await existing.unsubscribe()
+        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(null) })
+        setPushEnabled(false)
+      } else {
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+        })
+        await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) })
+        setPushEnabled(true)
+      }
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   async function checkConnection() {
     setVerify('checking')
@@ -150,6 +183,30 @@ export default function ConnectPage() {
           />
         )}
       </div>
+
+      {/* 토큰 만료 푸시 알림 */}
+      {pushSupported && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">토큰 만료 알림</p>
+              <p className="text-xs text-gray-500 mt-0.5">만료 14일 전 브라우저 푸시 알림을 받습니다</p>
+            </div>
+            <button
+              onClick={togglePush}
+              disabled={pushLoading}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-colors disabled:opacity-60 ${
+                pushEnabled
+                  ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'
+                  : 'bg-indigo-500 text-white hover:bg-indigo-600'
+              }`}
+            >
+              {pushEnabled ? <BellOff className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+              {pushLoading ? '처리 중...' : pushEnabled ? '알림 켜짐' : '알림 허용'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 안내 */}
       <div className="bg-amber-50 border border-amber-100 rounded-xl p-4">
